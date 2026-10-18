@@ -30,3 +30,11 @@ connected misses it and resyncs by reloading. Not stored.
 
 **Lease** — a Claim that expires. An expired Claim may be taken over by another processor,
 so a Lease does not guarantee only one processor ever works on a File.
+
+**Caption** — a one-sentence description of what an image File shows, written by an AI model
+once the File is a Published file. Optional: a File without one is simply untagged yet (and
+a private File is never described). Once written it is never replaced, even if the model
+would now say something different.
+
+**Tags** — a few short keywords describing an image File, produced together with its
+Caption and sharing its lifecycle.

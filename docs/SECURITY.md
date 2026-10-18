@@ -202,8 +202,39 @@ works if clients honor it — the demo client does (`api_retry`).
   SELECT/INSERT/UPDATE on `users`, SELECT/INSERT/DELETE on `follows` and `likes`.
 - `processor_user`: SELECT/UPDATE on `files`, nothing else — it cannot insert rows, touch
   the outbox, or delete files.
+- `tagger_user`: INSERT on `file_ai_metadata`, plus `SELECT (id, visibility, status,
+  thumbnail_key)` on `files` for the Published gate (ADR 0008). It can't change `files`,
+  see filenames, owners or checksums, and can't even read its own table: `ON CONFLICT (file_id)` would need SELECT
+  on that column to infer the index, so the insert uses a bare `ON CONFLICT DO NOTHING`
+  (found when the first insert failed with "permission denied").
+  `api_user` gets SELECT on `file_ai_metadata` to show captions.
 - Schema is created by the init job (superuser), not by services. In production:
   migration tooling (Flyway/Alembic) + per-service users, or per-service schemas.
+
+## AI provider calls (the tagger)
+
+The tagger is the first service that sends user content to a third party.
+
+- **What leaves**: the thumbnail (webp, a few KB) of **Published** images only, to OpenAI.
+  A private file is skipped, and tagged later if its owner makes it public (ADR 0008). The
+  gate reads visibility from Postgres right before each call, not from the event; and to Langfuse Cloud only the `gen_ai.*` spans (model, token counts,
+  the prompt text, the caption and tags). The image bytes are not in the trace. The
+  Langfuse exporter drops every span that isn't an LLM call (`tracing.py`), so internal
+  span names and attributes stay in Tempo.
+- **What is still exposed**: publishing is not consent to a third party, un-publishing
+  doesn't un-send, and the check can't be atomic with the model call (a window of one
+  call). A real product would add a per-user opt-in. OpenAI's data-retention terms apply
+  to what was sent. Files tagged before ADR 0008 were tagged regardless of visibility.
+- **The key**: `OPENAI_API_KEY` is mounted into the tagger only. A leaked container yields
+  spend, not data access; set a monthly spend cap on the key in OpenAI's dashboard.
+- **Egress**: no compose network is `internal`, so every container could already reach the
+  internet. The tagger is the first that does it on purpose. Locking egress down needs
+  `internal: true` networks plus an egress proxy, and is not done.
+- **Prompt injection**: the model reads pixels the uploader chose, so an image can contain
+  text such as "ignore your instructions". The damage is bounded by design: the answer is
+  parsed into `caption` + `tags` (strings, at most 6 tags) and stored. The model has no
+  tools, so the worst case is a misleading caption on the uploader's own file. Captions are
+  rendered as text by React, never as HTML.
 
 ## Secrets
 

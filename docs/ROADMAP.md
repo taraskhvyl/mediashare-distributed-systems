@@ -362,3 +362,49 @@ in a "works on my laptop" stack is really configuration, and what is hidden dev-
   pulled from a registry (the server stops compiling).
 
 Out of scope: Kubernetes and managed services (MSK, RDS, S3). Phase 5c covers k8s locally.
+
+## Phase 7 — AI features
+
+Question: what changes when a slow, flaky, paid, non-deterministic third party sits in an
+at-least-once pipeline? Order: 7a, then 7b, then 7c; each needs the data of the one before.
+Decisions and their trade-offs: [ADR 0007](adr/0007-first-ai-caption-wins.md) (first caption
+wins), [ADR 0008](adr/0008-only-published-files-go-to-the-model.md) (only Published files go
+to the model). Q&A: "How do you call a slow, paid, non-deterministic API…" in DESIGN-DECISIONS.
+
+### 7a. Tagger + Langfuse
+
+- [x] New `apps/tagger` (Python): its own consumer group; for Published files only (public AND
+  ready) it sends the thumbnail to OpenAI (`gpt-5.4-nano`, structured output: caption + tags)
+  and inserts into `file_ai_metadata` (first write wins, insert-only role). Uploads never wait.
+  - Found on the way: `ON CONFLICT (file_id)` needs SELECT on the column, so an insert-only role
+    got "permission denied"; a bare `ON CONFLICT DO NOTHING` needs only INSERT. The new consumer
+    group (`earliest`) replayed the whole `file.ready` history and called OpenAI for old files.
+  - Privacy gate (ADR 0008): `file.ready` and the new `file.made_public` (api, outbox) both
+    trigger a fresh read of the file's state. Checked in the tagger log: `file.ready` of a
+    private file → `skipped`; making it public → `file.made_public` → `tagged`.
+- [x] Failures: SDK backoff for 429/5xx, then `file-tagging-retry` → `file-tagging-dlq`.
+  The File's status never changes; a permanent failure leaves it untagged. (The retry path ran for
+  real: `NoSuchKey` and the permission error were retried. The DLQ end is the experiment below.)
+- [x] Tracing: a second OTLP exporter sends `gen_ai.*` spans to Langfuse Cloud next to `lgtm`;
+  checked through Langfuse's API: `GENERATION` with model, tokens, latency, input, output, and
+  the trace id of the tagger's log lines. The OTel OpenAI auto-instrumentation (2.4b0) doesn't
+  import against the current `opentelemetry-util-genai`, so the span is hand-made.
+- [x] api returns `caption`/`tags` on file and feed reads; the web app shows them (built, not yet
+  looked at in a browser); `make demo` step 9b; `SECURITY.md` (egress, API key, Published-only).
+- Experiments:
+  - [ ] A 150 s model call with a 120 s lease (in the processor inline vs. the tagger).
+  - [ ] Wrong API key: events land in the DLQ, uploads stay `ready`.
+  - [ ] Redeliver one `file.ready`: one row, the first caption survives.
+  - [ ] Self-host Langfuse in compose instead of Cloud (OTLP endpoint change only?).
+
+### 7b. MCP server
+
+- [ ] `apps/mcp-server`: tools over the api (`list_feed`, `like_file`, `follow_user`,
+  `search_files`); forwards the caller's Keycloak JWT, holds no credentials of its own
+  (ADR 0003 keeps holding). Open question: MCP's OAuth flow with Keycloak, token audience.
+
+### 7c. Semantic search
+
+- [ ] Embeddings of captions in pgvector, `GET /v1/search`; compare the query plan (exact vs.
+  approximate index) the way `tools/scripts/experiment-feed-plan.sh` does for the feed.
+
