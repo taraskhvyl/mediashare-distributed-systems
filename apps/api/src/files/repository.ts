@@ -1,4 +1,4 @@
-import { PoolClient } from 'pg'
+import type { PoolClient } from 'pg'
 import { pool, withTransaction } from '../adapters/postgres.js'
 import { insertOutboxEvent } from '../messaging/outbox.js'
 
@@ -97,10 +97,10 @@ export async function insertFileOnce(file: NewFile, idempotencyKey: string): Pro
 }
 
 export async function findFileByIdempotencyKey(ownerId: string, idempotencyKey: string): Promise<FileRow | null> {
-  const { rows } = await pool.query<FileRow>(
-    'SELECT * FROM files WHERE owner_id = $1 AND idempotency_key = $2',
-    [ownerId, idempotencyKey],
-  )
+  const { rows } = await pool.query<FileRow>('SELECT * FROM files WHERE owner_id = $1 AND idempotency_key = $2', [
+    ownerId,
+    idempotencyKey,
+  ])
   return rows[0] ?? null
 }
 
@@ -114,10 +114,7 @@ export async function findFileById(id: string): Promise<FileRow | null> {
  * Returns null for "doesn't exist" and "not yours" alike, so callers answer 404 for both
  * and never confirm that a private file id exists.
  */
-export async function findReadableFile(
-  id: string,
-  viewer: { id: string; isAdmin: boolean },
-): Promise<FileView | null> {
+export async function findReadableFile(id: string, viewer: { id: string; isAdmin: boolean }): Promise<FileView | null> {
   const { rows } = await pool.query<FileView>(
     `${FILE_VIEW_SELECT}
      WHERE f.id = $2 AND (f.owner_id = $1 OR $3 OR (${IS_PUBLISHED_SQL}))`,

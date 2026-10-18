@@ -1,9 +1,9 @@
-import { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { config } from '../config.js'
 import { requireRole } from '../http/auth.js'
-import { FILE_ID_PARAMS, FileIdParams } from '../http/schemas.js'
+import { FILE_ID_PARAMS, type FileIdParams } from '../http/schemas.js'
 import { serializeFile, serializeFileFor, viewerOf } from './access.js'
-import { Visibility } from './repository.js'
+import type { Visibility } from './repository.js'
 import * as files from './service.js'
 
 // HTTP for files: validate input, call the service, shape the response. Errors thrown by
@@ -59,16 +59,12 @@ export async function fileRoutes(app: FastifyInstance) {
     return reply.code(upload.replayed ? 200 : 201).send(body)
   })
 
-  app.patch(
-    '/files/:id',
-    { schema: { params: FILE_ID_PARAMS, body: CHANGE_VISIBILITY_BODY } },
-    async (req) => {
-      const { id } = req.params as FileIdParams
-      const { visibility } = req.body as { visibility: Visibility }
-      const file = await files.changeVisibility(id, req.user!.id, visibility)
-      return { file: serializeFile(file) }
-    },
-  )
+  app.patch('/files/:id', { schema: { params: FILE_ID_PARAMS, body: CHANGE_VISIBILITY_BODY } }, async (req) => {
+    const { id } = req.params as FileIdParams
+    const { visibility } = req.body as { visibility: Visibility }
+    const file = await files.changeVisibility(id, req.user!.id, visibility)
+    return { file: serializeFile(file) }
+  })
 
   // 202: accepted, processing happens asynchronously (watch status or the SSE stream).
   app.post('/files/:id/complete', { schema: { params: FILE_ID_PARAMS } }, async (req, reply) => {

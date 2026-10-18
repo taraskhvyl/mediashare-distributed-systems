@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from confluent_kafka import Producer
 
@@ -10,7 +10,7 @@ FLUSH_TIMEOUT_SECONDS = 10
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def new_envelope(event_type: str, aggregate_id: str, payload: dict) -> dict:

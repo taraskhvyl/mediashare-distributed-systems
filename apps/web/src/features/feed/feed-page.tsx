@@ -10,9 +10,7 @@ interface FeedPageProps {
 export function FeedPage({ feed, onToggleLike, onDownload }: FeedPageProps) {
   if (feed.length === 0) {
     return (
-      <p className="py-20 text-center text-muted-foreground">
-        Nothing here yet. Follow someone who has public files.
-      </p>
+      <p className="py-20 text-center text-muted-foreground">Nothing here yet. Follow someone who has public files.</p>
     )
   }
   return (

@@ -17,12 +17,13 @@ export async function readSseStream(body: ReadableStream<BufferSource>, onEvent:
     if (done) return
     buffer += value
 
-    let separatorIndex
-    while ((separatorIndex = buffer.indexOf(FRAME_SEPARATOR)) >= 0) {
+    let separatorIndex = buffer.indexOf(FRAME_SEPARATOR)
+    while (separatorIndex >= 0) {
       const frame = buffer.slice(0, separatorIndex)
       buffer = buffer.slice(separatorIndex + FRAME_SEPARATOR.length)
       const event = parseFrame(frame)
       if (event) onEvent(event.name, event.data)
+      separatorIndex = buffer.indexOf(FRAME_SEPARATOR)
     }
   }
 }

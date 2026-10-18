@@ -49,15 +49,22 @@ class ImageDescriber:
             "gen_ai.operation.name": "chat",
             "gen_ai.provider.name": "openai",
             "gen_ai.request.model": self.model,
-            "gen_ai.prompt": json.dumps([{"role": "user", "content": PROMPT, "image": f"{content_type}, {len(image)} bytes"}]),
+            "gen_ai.prompt": json.dumps(
+                [{"role": "user", "content": PROMPT, "image": f"{content_type}, {len(image)} bytes"}]
+            ),
         }
         with tracer.start_as_current_span("describe image", attributes=attributes) as span:
             response = self._client.responses.parse(
                 model=self.model,
-                input=[{"role": "user", "content": [
-                    {"type": "input_text", "text": PROMPT},
-                    {"type": "input_image", "image_url": _data_url(image, content_type)},
-                ]}],
+                input=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": PROMPT},
+                            {"type": "input_image", "image_url": _data_url(image, content_type)},
+                        ],
+                    }
+                ],
                 text_format=ImageDescription,
                 max_output_tokens=MAX_OUTPUT_TOKENS,
             )

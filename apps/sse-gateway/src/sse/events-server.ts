@@ -1,7 +1,7 @@
-import http, { IncomingMessage, ServerResponse } from 'node:http'
-import { AuthError, TokenVerifier } from '@mediashare/auth'
+import http, { type IncomingMessage, type ServerResponse } from 'node:http'
+import { AuthError, type AuthenticatedUser, type TokenVerifier } from '@mediashare/auth'
 import type { Logger } from 'pino'
-import { StreamRegistry } from './stream-registry.js'
+import type { StreamRegistry } from './stream-registry.js'
 
 const EVENTS_PATH = '/v1/events'
 const HEALTH_PATH = '/healthz'
@@ -62,7 +62,7 @@ export function startEventsServer(options: EventsServerOptions): http.Server {
   }
 
   async function openStream(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    let user
+    let user: AuthenticatedUser
     try {
       user = await verifyAuthorizationHeader(req.headers.authorization)
     } catch (err) {
@@ -84,7 +84,10 @@ export function startEventsServer(options: EventsServerOptions): http.Server {
     const msUntilExpiry = Math.max(0, user.expiresAt * 1000 - Date.now())
     const closeAtExpiry = setTimeout(() => res.end(), msUntilExpiry)
 
-    log.info({ userId: user.id, openStreams: registry.countFor(user.id), closesInMs: msUntilExpiry }, 'sse stream opened')
+    log.info(
+      { userId: user.id, openStreams: registry.countFor(user.id), closesInMs: msUntilExpiry },
+      'sse stream opened',
+    )
 
     res.on('close', () => {
       clearInterval(heartbeat)

@@ -1,7 +1,7 @@
 import { pool, withTransaction } from '../adapters/postgres.js'
-import { FILE_VIEW_SELECT, FileView, IS_PUBLISHED_SQL, findPublishedFileForUpdate } from '../files/repository.js'
+import { FILE_VIEW_SELECT, type FileView, findPublishedFileForUpdate, IS_PUBLISHED_SQL } from '../files/repository.js'
 import { insertOutboxEvent } from '../messaging/outbox.js'
-import { FeedPosition } from './feed-cursor.js'
+import type { FeedPosition } from './feed-cursor.js'
 
 // Repository for `follows` and `likes`, and the feed query that joins them with files.
 
@@ -12,10 +12,10 @@ export interface Liker {
 
 /** Follow is a state, so repeating it changes nothing (ON CONFLICT DO NOTHING). */
 export async function insertFollow(followerId: string, followeeId: string): Promise<void> {
-  await pool.query(
-    'INSERT INTO follows (follower_id, followee_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-    [followerId, followeeId],
-  )
+  await pool.query('INSERT INTO follows (follower_id, followee_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [
+    followerId,
+    followeeId,
+  ])
 }
 
 export async function deleteFollow(followerId: string, followeeId: string): Promise<void> {

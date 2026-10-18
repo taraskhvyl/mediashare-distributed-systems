@@ -1,9 +1,9 @@
 import { DomainError, fileNotFound } from '../errors.js'
-import { FileView } from '../files/repository.js'
+import type { FileView } from '../files/repository.js'
 import { getUser } from '../users/service.js'
 import { decodeFeedCursor, encodeFeedCursor } from './feed-cursor.js'
+import type { Liker } from './repository.js'
 import * as repository from './repository.js'
-import { Liker } from './repository.js'
 
 export interface FeedPage {
   files: FileView[]

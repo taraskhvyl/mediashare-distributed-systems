@@ -1,6 +1,6 @@
-import { LIVE_EVENTS_CHANNEL, decodeLiveEvent } from '@mediashare/live-events'
+import { decodeLiveEvent, LIVE_EVENTS_CHANNEL } from '@mediashare/live-events'
 import { context } from '@opentelemetry/api'
-import { Redis } from 'ioredis'
+import type { Redis } from 'ioredis'
 import { logger } from '../log.js'
 import type { StreamRegistry } from '../sse/stream-registry.js'
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { keepLiveEventsConnected } from './live-events'
 import { log } from '@/features/log/log-store'
+import { keepLiveEventsConnected } from './live-events'
 
 interface LiveEventHandlers {
   /** Events are about your own files (processing done, someone liked one). */

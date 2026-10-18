@@ -1,15 +1,10 @@
-import { FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import { redis } from '../adapters/redis.js'
 import { config } from '../config.js'
 
 declare module 'ioredis' {
   interface RedisCommander<Context> {
-    tokenBucket(
-      key: string,
-      capacity: number,
-      refillPerMs: number,
-      nowMs: number,
-    ): Promise<number>
+    tokenBucket(key: string, capacity: number, refillPerMs: number, nowMs: number): Promise<number>
   }
 }
 

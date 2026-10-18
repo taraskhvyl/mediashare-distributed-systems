@@ -64,7 +64,9 @@ def _handle_message(msg: Message, tagger: Tagger) -> None:
     try:
         envelope = json.loads(msg.value())
     except (json.JSONDecodeError, UnicodeDecodeError):
-        logger.error("poison message dropped", extra={"ctx": {"topic": msg.topic(), "partition": msg.partition()}})
+        logger.error(
+            "poison message dropped", extra={"ctx": {"topic": msg.topic(), "partition": msg.partition()}}
+        )
         return
 
     # Continues the trace of whoever produced the message (the processor's `file.ready`),
@@ -78,14 +80,16 @@ def _handle_message(msg: Message, tagger: Tagger) -> None:
             result = tagger.handle(envelope)
             logger.info(
                 "event handled",
-                extra={"ctx": {
-                    "eventId": envelope.get("eventId"),
-                    "eventType": envelope.get("eventType"),
-                    "topic": msg.topic(),
-                    "partition": msg.partition(),
-                    "offset": msg.offset(),
-                    "result": result,
-                }},
+                extra={
+                    "ctx": {
+                        "eventId": envelope.get("eventId"),
+                        "eventType": envelope.get("eventType"),
+                        "topic": msg.topic(),
+                        "partition": msg.partition(),
+                        "offset": msg.offset(),
+                        "result": result,
+                    }
+                },
             )
         except EventProcessingError as exc:
             tagger.handle_failure(envelope, exc)

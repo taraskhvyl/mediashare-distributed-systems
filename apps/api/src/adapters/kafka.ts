@@ -1,4 +1,4 @@
-import { Kafka, Producer } from 'kafkajs'
+import { Kafka, type Producer } from 'kafkajs'
 import { config } from '../config.js'
 
 const CLIENT_RETRIES = 10

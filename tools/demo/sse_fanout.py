@@ -10,6 +10,7 @@ so `make demo`'s assertions are unaffected.
 
     .venv/bin/python tools/demo/sse_fanout.py
 """
+
 import time
 
 from client import api, api_retry, get_token, open_event_stream

@@ -1,6 +1,6 @@
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { serializePublicFile } from '../files/access.js'
-import { FILE_ID_PARAMS, FileIdParams, USERNAME_PARAMS, UsernameParams } from '../http/schemas.js'
+import { FILE_ID_PARAMS, type FileIdParams, USERNAME_PARAMS, type UsernameParams } from '../http/schemas.js'
 import * as social from './service.js'
 
 const FEED_DEFAULT_LIMIT = 20

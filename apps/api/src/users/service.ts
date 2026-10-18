@@ -1,6 +1,6 @@
 import { userNotFound } from '../errors.js'
+import type { UserRow } from './repository.js'
 import * as repository from './repository.js'
-import { UserRow } from './repository.js'
 
 export interface UserProfile {
   username: string

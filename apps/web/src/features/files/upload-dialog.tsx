@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { ImagePlus } from 'lucide-react'
+import { useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { reportError } from '@/features/log/report'
@@ -38,7 +38,9 @@ export function UploadDialog({ open, onOpenChange, onUpload }: UploadDialogProps
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Create new post</DialogTitle>
-          <DialogDescription>Images get a thumbnail; every file is scanned before anyone else sees it.</DialogDescription>
+          <DialogDescription>
+            Images get a thumbnail; every file is scanned before anyone else sees it.
+          </DialogDescription>
         </DialogHeader>
 
         {isUploading ? (

@@ -1,5 +1,5 @@
-import { FastifyReply, FastifyRequest } from 'fastify'
 import { AuthError, createTokenVerifier } from '@mediashare/auth'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import { config } from '../config.js'
 
 const verifyAuthorizationHeader = createTokenVerifier({

@@ -50,9 +50,7 @@ export async function presignDownload(objectKey: string): Promise<string> {
 /** Size of an uploaded object, or null if it isn't there (or storage is unreachable). */
 export async function headUpload(objectKey: string): Promise<{ contentLength: number } | null> {
   try {
-    const out = await internal.send(
-      new HeadObjectCommand({ Bucket: config.s3.uploadsBucket, Key: objectKey }),
-    )
+    const out = await internal.send(new HeadObjectCommand({ Bucket: config.s3.uploadsBucket, Key: objectKey }))
     return { contentLength: out.ContentLength ?? 0 }
   } catch {
     return null
@@ -60,15 +58,11 @@ export async function headUpload(objectKey: string): Promise<{ contentLength: nu
 }
 
 export async function deleteUpload(objectKey: string): Promise<void> {
-  await internal.send(
-    new DeleteObjectCommand({ Bucket: config.s3.uploadsBucket, Key: objectKey }),
-  )
+  await internal.send(new DeleteObjectCommand({ Bucket: config.s3.uploadsBucket, Key: objectKey }))
 }
 
 export async function deleteThumbnail(thumbnailKey: string): Promise<void> {
-  await internal.send(
-    new DeleteObjectCommand({ Bucket: config.s3.thumbnailsBucket, Key: thumbnailKey }),
-  )
+  await internal.send(new DeleteObjectCommand({ Bucket: config.s3.thumbnailsBucket, Key: thumbnailKey }))
 }
 
 export function thumbnailPublicUrl(thumbnailKey: string): string {

@@ -1,6 +1,6 @@
-import { Consumer, Kafka } from 'kafkajs'
+import { type Consumer, Kafka } from 'kafkajs'
 import { config } from '../config.js'
-import { EnvelopeHandler, EventEnvelope } from '../events.js'
+import type { EnvelopeHandler, EventEnvelope } from '../events.js'
 import { logger } from '../log.js'
 
 /**

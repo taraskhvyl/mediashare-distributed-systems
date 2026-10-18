@@ -2,9 +2,9 @@ import crypto from 'node:crypto'
 import type { FastifyBaseLogger } from 'fastify'
 import * as s3 from '../adapters/s3.js'
 import { DomainError, fileNotFound } from '../errors.js'
-import { Viewer } from './access.js'
+import type { Viewer } from './access.js'
+import type { FileRow, FileView, NewFile, Visibility } from './repository.js'
 import * as repository from './repository.js'
-import { FileRow, FileView, NewFile, Visibility } from './repository.js'
 
 // What each file operation does, step by step. No HTTP (routes.ts) and no SQL (repository.ts).
 //
@@ -95,10 +95,7 @@ async function assertUploadedAsDeclared(file: FileRow): Promise<void> {
   }
   const declaredBytes = Number(file.size_bytes)
   if (stored.contentLength !== declaredBytes) {
-    throw new DomainError(
-      'size_mismatch',
-      `Declared ${declaredBytes} bytes but uploaded ${stored.contentLength} bytes`,
-    )
+    throw new DomainError('size_mismatch', `Declared ${declaredBytes} bytes but uploaded ${stored.contentLength} bytes`)
   }
 }
 
