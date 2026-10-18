@@ -1,4 +1,5 @@
 import { Download, Heart } from 'lucide-react'
+import { FileCaption } from '@/components/file-caption'
 import { FileThumbnail } from '@/components/file-thumbnail'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -38,6 +39,7 @@ export function FileDialog({ file, onClose, onToggleVisibility, onDownload }: Fi
         </DialogHeader>
 
         <FileThumbnail thumbnailUrl={file.thumbnailUrl} filename={file.filename} className="rounded-md" />
+        <FileCaption caption={file.caption} tags={file.tags} />
 
         <label className="flex items-center justify-between gap-4">
           <span>

@@ -54,6 +54,16 @@ CREATE TABLE IF NOT EXISTS likes (
   PRIMARY KEY (user_id, file_id)
 );
 
+-- AI caption + tags of an image (ADR 0007). Written once by the tagger; the primary key
+-- makes the first write win, so a redelivered event can't replace it. No row = untagged.
+CREATE TABLE IF NOT EXISTS file_ai_metadata (
+  file_id UUID PRIMARY KEY REFERENCES files (id) ON DELETE CASCADE,
+  caption TEXT NOT NULL,
+  tags TEXT[] NOT NULL,
+  model TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS outbox_events (
   id BIGSERIAL PRIMARY KEY,
   event_id UUID NOT NULL,
@@ -75,5 +85,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON files TO api_user;
 GRANT SELECT, INSERT, DELETE ON follows TO api_user;
 GRANT SELECT, INSERT, DELETE ON likes TO api_user;
 GRANT SELECT, UPDATE ON files TO processor_user;
+GRANT SELECT ON file_ai_metadata TO api_user;
+GRANT INSERT ON file_ai_metadata TO tagger_user;
+-- Column-level: the tagger may look at whether a file is Published and where its thumbnail is,
+-- and nothing else about it (ADR 0008).
+GRANT SELECT (id, visibility, status, thumbnail_key) ON files TO tagger_user;
 GRANT SELECT, INSERT, UPDATE ON outbox_events TO api_user;
 GRANT USAGE, SELECT ON SEQUENCE outbox_events_id_seq TO api_user;

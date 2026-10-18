@@ -28,6 +28,7 @@ flowchart LR
     redis[(redis)]
     kafka{{kafka}}
     processor["processor (Python)"]
+    tagger["tagger (Python)"]
     notifier["notifier (Node)"]
     lgtm["lgtm: traces + logs<br/>Grafana 127.0.0.1:3000"]
   end
@@ -36,16 +37,20 @@ flowchart LR
   api --> redis
   api -- "outbox relay" --> kafka
   kafka --> processor
+  kafka --> tagger
   kafka --> notifier
   notifier -- "PUBLISH sse-events" --> redis
   redis -- "SUBSCRIBE (network sse)" --> sse
   processor --> postgres
   processor --> storage
+  tagger --> postgres
+  tagger --> storage
   api --> storage
   api -. OTLP .-> lgtm
   notifier -. OTLP .-> lgtm
   sse -. OTLP .-> lgtm
   processor -. OTLP .-> lgtm
+  tagger -. OTLP .-> lgtm
 ```
 
 Network rules (enforced by Docker, mirroring VPC subnets + security groups):
@@ -67,6 +72,7 @@ A fourth, **telemetry**, holds only `gateway` and `lgtm`: the edge exports its s
 | kafka       | ✖    | ✔    | ✖   | api, processor, notifier       | —                               |
 | redis       | ✖    | ✔    | ✔   | api, notifier, sse-gateway (ACL: SUBSCRIBE only) | —             |
 | processor   | ✖    | ✔    | ✖   | internal only                  | postgres, kafka, storage        |
+| tagger      | ✖    | ✔    | ✖   | internal only                  | postgres (INSERT + 4-column gate read), kafka, storage (read thumbnails), OpenAI + Langfuse egress |
 | notifier    | ✖    | ✔    | ✖   | internal only                  | kafka, redis (ACL: PUBLISH only), webhook egress |
 | sse-gateway | ✔    | ✖    | ✔   | gateway (`/v1/events` only)    | redis, keycloak, lgtm           |
 | lgtm        | ✖    | ✔    | ✔   | api, processor, notifier, sse-gateway (OTLP); host loopback :3000 | — |
@@ -162,21 +168,27 @@ shared package, `@mediashare/live-events`, so the two sides can't drift apart.
 Kafka message key), `event_type`, `payload` jsonb, `traceparent` (trace context of the
 request that wrote the row, see "Tracing"), `published_at` (null until relayed).
 
-Roles: `api_user` (DML on both tables), `processor_user` (SELECT/UPDATE on `files` only).
+`file_ai_metadata` — the AI caption and tags (`file_id` PK, `caption`, `tags`, `model`), written once
+by the tagger; the primary key makes the first write win (ADR 0007). No row = untagged.
+
+Roles: `api_user` (DML on both tables), `processor_user` (SELECT/UPDATE on `files` only),
+`tagger_user` (INSERT on `file_ai_metadata`; SELECT on four columns of `files`).
 DDL is owned by the init job, not by any service — services never create tables.
 
 ## Kafka topology
 
 | topic             | partitions | retention | writers            | readers                        |
 |-------------------|-----------|-----------|--------------------|--------------------------------|
-| `file-events`     | 3         | default   | api relay, processor (emits result events) | processor, notifier |
+| `file-events`     | 3         | default   | api relay (incl. `file.made_public`), processor (emits result events) | processor, notifier, tagger |
 | `file-events-retry`| 3        | default   | processor          | processor                      |
 | `file-events-dlq` | 1         | 7 days    | processor          | (ops / inspection)             |
+| `file-tagging-retry` | 3      | default   | tagger             | tagger                         |
+| `file-tagging-dlq` | 1        | 7 days    | tagger             | (ops / inspection)             |
 
 - Messages are keyed by `fileId` → **all events for one file land on the same partition**,
   so per-file ordering is guaranteed while different files process in parallel.
-- Two **consumer groups** (`processor`, `notifier`) read the same topic independently —
-  each has its own committed offsets. Notifier progress never blocks processing.
+- Three **consumer groups** (`processor`, `notifier`, `tagger`) read the same topic independently —
+  each has its own committed offsets. Notifier or tagger progress never blocks processing.
 - Topics are provisioned by a `kafka-init` job before any consumer starts; auto-topic-creation
   is disabled (a broker that silently creates topics on typo is a production hazard).
 - `KAFKA_NUM_PARTITIONS=3` is also the ceiling for processor parallelism: at most 3
@@ -234,7 +246,11 @@ flowchart TD
 ```
 
 Upload: `POST …/complete` → outbox → `processor handle file.uploaded` (claim, S3 get,
-`scan`, `thumbnail`, S3 put, mark ready) → `file-events send` → notifier.
+`scan`, `thumbnail`, S3 put, mark ready) → `file-events send` → notifier, and → `tagger handle
+file.ready` / `file.made_public` (Published? then S3 get, `describe image`, insert), in the same trace.
+
+The `describe image` span is also exported to Langfuse Cloud (second OTLP exporter in
+`apps/tagger/src/tracing.py`, `gen_ai.*` spans only), so the same trace id opens in Tempo and in Langfuse.
 
 How the context crosses each hop:
 

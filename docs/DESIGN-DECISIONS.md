@@ -519,6 +519,9 @@ ACLs — exactly like real S3.
   member took it and drained it in 5 s. A job cut mid-way stays `processing` until the
   reaper frees its Lease (120 s); the processor has no SIGTERM handler yet, so even a
   planned stop behaves like a crash (roadmap Phase 4, "Graceful shutdown").
+- **tagger / OpenAI** — files stay `ready`, just without a caption. The SDK retries
+  429/5xx with backoff, then events go `file-tagging-retry` → `file-tagging-dlq`. The cost
+  is lag on the `tagger` group, never a stuck upload.
 - **notifier** — webhooks and Live events pause; its committed Kafka offsets hold the
   backlog, so on restart it catches up and sends both, late. A Live event reaches only
   tabs open at that moment (at-most-once; tabs resync on reconnect).
@@ -535,6 +538,51 @@ ACLs — exactly like real S3.
 Healthchecks with `depends_on: condition: service_healthy` and graceful SIGTERM
 handlers (`apps/api/src/main.ts`, the Node services) are right there in the compose file;
 the processor's is still missing.
+
+## Q: How do you call a slow, paid, non-deterministic API from an at-least-once pipeline?
+
+The tagger (`apps/tagger`, ADRs 0007 and 0008) captions and tags every Published image with OpenAI.
+
+- **Which files may go to a third party.** A private file's pixels must not reach OpenAI,
+  so the tagger only tags Published files (ADR 0008). Public and ready are two facts that
+  arrive as two events (`file.ready`, and the new `file.made_public`, written by the api in
+  the visibility transaction through the outbox), in either order. Both trigger the same
+  check, which reads the file's state from Postgres at that moment (a four-column grant)
+  and skips if it isn't Published; the second event finds it is. The event is only a
+  "look at this file" nudge, never the source of truth. Limits: un-publishing doesn't
+  un-send, and the gate can't be atomic with the model call.
+- **Not inside the processor.** A model call can take seconds to minutes and fails on rate
+  limits and outages. Inline, it would hold the processor's 120 s lease (a slow call lets
+  the reaper hand the file to a second worker) and a provider outage would turn every
+  upload into `failed`. Instead the tagger is its own consumer group on `file.ready`:
+  the file is `ready` as before, the caption arrives later, and the worst case for an
+  outage is lag on one group and untagged files.
+- **Idempotency by the schema.** The model gives a different answer every time and Kafka
+  may deliver twice. `file_ai_metadata.file_id` is the primary key and the insert is
+  `ON CONFLICT DO NOTHING`: the first caption wins and a repeat can never replace it. The
+  price is one wasted model call per duplicate; a read-before-call would save it but is a
+  check-then-act race between replicas, so the insert stays the only authority.
+- **Retry in two layers.** The SDK retries 429/5xx/timeouts with exponential backoff and
+  honors `Retry-After` inside one attempt. What is left goes to `file-tagging-retry`, then
+  `file-tagging-dlq` after 3 attempts. The file's status never changes. The gap: that retry
+  topic has no delay (roadmap Phase 4) and can't tell a permanent error from a transient one.
+- **Least privilege shows up in SQL.** `tagger_user` may only INSERT. The first version used
+  `ON CONFLICT (file_id)`, which Postgres rejected with "permission denied": naming the
+  conflict target needs SELECT on that column. A bare `ON CONFLICT DO NOTHING` needs only INSERT.
+- **A new consumer group replays history.** `auto.offset.reset=earliest` made the first
+  start tag every `file.ready` still in the topic, including files whose thumbnails were
+  long gone (`NoSuchKey` → retries → DLQ) and spending real money on the rest. For a
+  paid consumer, start at `latest` or cap the backfill deliberately.
+- **No announcement.** The tagger writes Postgres and does not publish an event: two
+  writes to two systems is the dual-write problem the api solves with the outbox, and a
+  toast for a caption isn't worth that machinery. Captions show on the next load.
+- **Observability.** One `describe image` span per call with the `gen_ai.*` attributes
+  (model, tokens, prompt, answer; not the image). It goes to Tempo with the rest of the
+  trace and, via a second OTLP exporter that only forwards LLM spans, to Langfuse Cloud,
+  with the same trace id in both. The OpenTelemetry OpenAI auto-instrumentation (2.4b0)
+  did not import against the current `opentelemetry-util-genai`, so the span is hand-made.
+- **Trade-off you must say out loud:** the thumbnails of Published files go to a third
+  party; "public" is not consent (see "AI provider calls" in SECURITY.md).
 
 ## Q: How does this scale?
 

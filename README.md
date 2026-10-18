@@ -95,6 +95,7 @@ The demo client narrates every step and asserts each behavior:
    - 7b. the same result also arrived **pushed over SSE** (`file.ready`)
 8. compare sha256 of the processed file against the local file
 9. download the original via a short-lived presigned URL; fetch the **public** thumbnail
+   - 9b. a **private** file gets no AI caption; publishing it makes the tagger add one (then back to private)
 10. upload an "infected" file → processor detects it, purges the object, status `infected`, downloads blocked (403)
 11. burst 12 mutations → 429s from the per-user limits (client honors `Retry-After`)
 12. RBAC: regular user's DELETE → 403; admin's DELETE → 204
@@ -127,6 +128,7 @@ Keycloak admin console: `https://auth.localhost/admin` (user `admin`, password f
 | keycloak   | Keycloak 26    | OIDC identity provider, issues JWTs                              |
 | api        | Node 24 + TS (Fastify 5) | public REST API: auth, presigned URLs, idempotency, outbox relay |
 | processor  | Python 3.14    | Kafka consumer: malware scan, thumbnails, retry/DLQ, idempotent CAS claim |
+| tagger     | Python 3.14    | Kafka consumer (own group): OpenAI vision → caption + tags for Published files only, retry/DLQ, LLM spans to Langfuse |
 | notifier   | Node 24 + TS   | second Kafka consumer group: webhooks + live events published to Redis |
 | sse-gateway | Node 24 + TS  | SSE stream `/v1/events` to the browser, fed by Redis pub/sub (no Kafka access) |
 | postgres   | Postgres 18    | file metadata + outbox table, least-privilege per-service roles  |
@@ -165,6 +167,7 @@ apps/                  what gets deployed (each app and package has its own READ
   notifier/            Node + TS Kafka consumer (webhooks, publishes live events)
   sse-gateway/         Node + TS SSE endpoint, subscribes to live events
   processor/           Python worker (scan, thumbnail, retry/DLQ)
+  tagger/              Python worker (AI caption + tags via OpenAI, Langfuse traces)
   web/                 browser app (React + TS, features/ + adapters/, built by Vite)
   node.Dockerfile      one image recipe for both Node apps
   web.Dockerfile       web app: Vite build, then nginx serves dist/

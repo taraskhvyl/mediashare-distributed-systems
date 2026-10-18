@@ -20,6 +20,9 @@ export interface FileRow {
   checksum: string | null
   created_at: Date
   updated_at: Date
+  /** From file_ai_metadata (LEFT JOIN): null = not tagged yet; absent on rows from a bare RETURNING *. */
+  caption?: string | null
+  tags?: string[] | null
 }
 
 export type Visibility = 'private' | 'public'
@@ -44,18 +47,25 @@ export interface NewFile {
 /** The domain rule for a Published file (CONTEXT.md), for queries that alias files as `f`. */
 export const IS_PUBLISHED_SQL = `f.visibility = 'public' AND f.status = 'ready'`
 
+/** The AI caption and tags of a file aliased `f` (ADR 0007). LEFT JOIN: untagged files stay. */
+const AI_METADATA_COLUMNS = 'm.caption, m.tags'
+const AI_METADATA_JOIN = 'LEFT JOIN file_ai_metadata m ON m.file_id = f.id'
+
 /** Columns of a FileView; `$1` must be the viewer's id. Append WHERE/ORDER BY. */
 export const FILE_VIEW_SELECT = `
   SELECT f.*,
+         ${AI_METADATA_COLUMNS},
          f.created_at::text AS created_at_exact,
          u.username AS owner_username,
          EXISTS (SELECT 1 FROM likes l WHERE l.file_id = f.id AND l.user_id = $1) AS liked_by_me
   FROM files f
-  JOIN users u ON u.id = f.owner_id`
+  JOIN users u ON u.id = f.owner_id
+  ${AI_METADATA_JOIN}`
 
 export async function listOwnedFiles(ownerId: string, limit: number, offset: number): Promise<FileRow[]> {
   const { rows } = await pool.query<FileRow>(
-    'SELECT * FROM files WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+    `SELECT f.*, ${AI_METADATA_COLUMNS} FROM files f ${AI_METADATA_JOIN}
+     WHERE f.owner_id = $1 ORDER BY f.created_at DESC LIMIT $2 OFFSET $3`,
     [ownerId, limit, offset],
   )
   return rows
@@ -134,13 +144,30 @@ export async function findPublishedFileForUpdate(client: PoolClient, id: string)
   return rows[0] ?? null
 }
 
+/**
+ * Changes visibility; going private -> public also writes `file.made_public` in the same
+ * transaction (outbox), which is what lets the tagger send the image to a model only once
+ * the file is public (ADR 0008). Repeating "public" on a public file emits nothing.
+ */
 export async function setVisibility(id: string, ownerId: string, visibility: Visibility): Promise<FileRow | null> {
-  const { rows } = await pool.query<FileRow>(
-    `UPDATE files SET visibility = $3, updated_at = now()
-     WHERE id = $1 AND owner_id = $2 RETURNING *`,
-    [id, ownerId, visibility],
-  )
-  return rows[0] ?? null
+  return withTransaction(async (client) => {
+    const current = await client.query<{ visibility: Visibility }>(
+      'SELECT visibility FROM files WHERE id = $1 AND owner_id = $2 FOR UPDATE',
+      [id, ownerId],
+    )
+    if (current.rowCount === 0) return null
+    const becamePublic = visibility === 'public' && current.rows[0].visibility !== 'public'
+
+    const { rows } = await client.query<FileRow>(
+      `WITH f AS (
+         UPDATE files SET visibility = $2, updated_at = now() WHERE id = $1 RETURNING *
+       )
+       SELECT f.*, ${AI_METADATA_COLUMNS} FROM f ${AI_METADATA_JOIN}`,
+      [id, visibility],
+    )
+    if (becamePublic) await insertOutboxEvent(client, 'file.made_public', id, { fileId: id, ownerId })
+    return rows[0]
+  })
 }
 
 /**

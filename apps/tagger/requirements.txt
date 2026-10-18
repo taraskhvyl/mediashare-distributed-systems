@@ -1,0 +1,14 @@
+boto3>=1.35,<2
+confluent-kafka>=2.6,<3
+psycopg[binary]>=3.2,<4
+# 2.x: the 3.x line moved to httpx2, which the OTel httpx instrumentation can't patch.
+openai>=2,<3
+# OpenTelemetry, zero-code: `opentelemetry-instrument` (Dockerfile CMD) patches these libs.
+# httpx shows every OpenAI HTTP attempt (a 429 and its retry) as its own span.
+opentelemetry-distro==0.66b0
+opentelemetry-exporter-otlp-proto-http==1.45.0
+opentelemetry-instrumentation-confluent-kafka==0.66b0
+opentelemetry-instrumentation-psycopg==0.66b0
+opentelemetry-instrumentation-botocore==0.66b0
+opentelemetry-instrumentation-httpx==0.66b0
+opentelemetry-instrumentation-logging==0.66b0

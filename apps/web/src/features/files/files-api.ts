@@ -12,6 +12,8 @@ export interface OwnFile {
   visibility: 'public' | 'private'
   likeCount: number
   thumbnailUrl: string | null
+  caption: string | null
+  tags: string[]
   createdAt: string
 }
 

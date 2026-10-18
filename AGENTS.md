@@ -119,6 +119,9 @@ Top level: `apps/` (deployed), `packages/` (shared libs), `infra/` (third-party 
 - `apps/processor`: Python 3.14 Kafka consumer. Scan + thumbnail, CAS claim, retry/DLQ,
   expired-claim reaper (`src/pipeline/handler.py`, `src/adapters/db.py`); poll/commit
   loop in `src/kafka_loop.py`.
+- `apps/tagger`: Python Kafka consumer (group `tagger`) on `file.ready` + `file.made_public`: only Published files
+  (ADR 0008): thumbnail → OpenAI → caption + tags in `file_ai_metadata` (first write wins, ADR 0007). Own retry/DLQ topics; LLM spans also go to Langfuse.
+  The only app with outbound internet; needs `OPENAI_API_KEY` in `.env`.
 - `apps/notifier`: Node Kafka consumer (separate consumer group): webhooks, and live events
   `PUBLISH`ed to Redis `sse-events` (`src/redis/publisher.ts`). `data` network only, no HTTP.
 - `apps/sse-gateway`: SSE endpoint `GET /v1/events` for the browser (`src/sse/events-server.ts`,

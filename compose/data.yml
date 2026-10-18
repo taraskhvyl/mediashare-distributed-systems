@@ -10,6 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       API_DB_PASSWORD: ${API_DB_PASSWORD:?}
       PROCESSOR_DB_PASSWORD: ${PROCESSOR_DB_PASSWORD:?}
+      TAGGER_DB_PASSWORD: ${TAGGER_DB_PASSWORD:?}
     networks: [data]
     volumes:
       - pgdata:/var/lib/postgresql
@@ -94,6 +95,8 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic file-events --partitions 3 --replication-factor 1 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic file-events-retry --partitions 3 --replication-factor 1 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic file-events-dlq --partitions 1 --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic file-tagging-retry --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic file-tagging-dlq --partitions 1 --replication-factor 1 --config retention.ms=604800000 &&
         echo 'kafka topics provisioned'
     restart: "no"
 
@@ -112,6 +115,8 @@ services:
       S3_API_SECRET_KEY: ${S3_API_SECRET_KEY:?}
       S3_PROCESSOR_ACCESS_KEY: ${S3_PROCESSOR_ACCESS_KEY:?}
       S3_PROCESSOR_SECRET_KEY: ${S3_PROCESSOR_SECRET_KEY:?}
+      S3_TAGGER_ACCESS_KEY: ${S3_TAGGER_ACCESS_KEY:?}
+      S3_TAGGER_SECRET_KEY: ${S3_TAGGER_SECRET_KEY:?}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -120,6 +125,7 @@ services:
           {"name": "anonymous", "actions": ["Read:media-thumbnails"]},
           {"name": "api-svc", "credentials": [{"accessKey": "$$S3_API_ACCESS_KEY", "secretKey": "$$S3_API_SECRET_KEY"}], "actions": ["Read:media-uploads", "Write:media-uploads", "Write:media-thumbnails"]},
           {"name": "processor-svc", "credentials": [{"accessKey": "$$S3_PROCESSOR_ACCESS_KEY", "secretKey": "$$S3_PROCESSOR_SECRET_KEY"}], "actions": ["Read:media-uploads", "Write:media-uploads", "Write:media-thumbnails"]},
+          {"name": "tagger-svc", "credentials": [{"accessKey": "$$S3_TAGGER_ACCESS_KEY", "secretKey": "$$S3_TAGGER_SECRET_KEY"}], "actions": ["Read:media-thumbnails"]},
           {"name": "root-admin", "credentials": [{"accessKey": "$$S3_ADMIN_ACCESS_KEY", "secretKey": "$$S3_ADMIN_SECRET_KEY"}], "actions": ["Admin", "Read", "List", "Write", "Tagging"]}
         ]}
         EOF
