@@ -389,8 +389,8 @@ to the model). Q&A: "How do you call a slow, paid, non-deterministic API…" in 
   checked through Langfuse's API: `GENERATION` with model, tokens, latency, input, output, and
   the trace id of the tagger's log lines. The OTel OpenAI auto-instrumentation (2.4b0) doesn't
   import against the current `opentelemetry-util-genai`, so the span is hand-made.
-- [x] api returns `caption`/`tags` on file and feed reads; the web app shows them (built, not yet
-  looked at in a browser); `make demo` step 9b; `SECURITY.md` (egress, API key, Published-only).
+- [x] api returns `caption`/`tags` on file and feed reads; the web app shows them (confirmed in the browser: caption and tags
+  appear on a Published file); `make demo` step 9b; `SECURITY.md` (egress, API key, Published-only).
 - Experiments:
   - [ ] A 150 s model call with a 120 s lease (in the processor inline vs. the tagger).
   - [ ] Wrong API key: events land in the DLQ, uploads stay `ready`.
