@@ -4,8 +4,7 @@ Goal: **interview readiness + real understanding** of distributed systems, using
 
 **Definition of done for an experiment:** you ran it and saw the behavior yourself, **and**
 a Q&A entry for it exists in [DESIGN-DECISIONS.md](DESIGN-DECISIONS.md) that you could
-explain out loud. Before each run, write a one-line prediction ("I expect…"). Being wrong
-is where the learning happens.
+explain out loud.
 
 Ground rules:
 - Runtime is **Docker Compose** for Phases 1–4. Kubernetes appears only as an optional Phase 5 topic.
@@ -288,17 +287,11 @@ Follow-ups found in 2 (not scheduled):
     The service graph's `user → api` edge is replaced by `gateway`.
   - Motivation: Run 4 kill test, 88 × 503 sent to the dead api replica before STRICT_DNS
     dropped it (no retry, no outlier detection). Re-run the kill under k6 and compare.
-  - Prediction: _
 - [ ] **Feed at scale**: seed thousands of follows; fan-out-on-read p99 blows up → fan-out on write (`feed-writer` consumer, Redis sorted set per user) → one user with 50k followers spikes lag → hybrid
-  - Prediction: _
 - [ ] **Hot key**: hammer likes on one viral file; row-lock contention caps throughput regardless of replicas → sharded counters → Redis `INCR` + periodic flush (exact vs approximate)
-  - Prediction: _
 - [ ] Increase to 6 partitions: key→partition remapping, effect on per-file ordering
-  - Prediction: _
 - [ ] Postgres read replica for GETs: replication lag, read-your-writes violation right after `complete`
-  - Prediction: _
 - [ ] 3 Kafka brokers, RF=3, `min.insync.replicas=2`, `acks=all`: durability vs. latency; kill the leader
-  - Prediction: _
 
 Key idea: fixing a bottleneck moves it. Parallelism is capped by partitions, not replicas.
 
@@ -307,24 +300,17 @@ Key idea: fixing a bottleneck moves it. Parallelism is capped by partitions, not
 Run in this order; each builds on the last.
 
 - [ ] **Kafka down**: **add outbox-backlog metric**; backlog grows, then drains, nothing lost
-  - Prediction: _
 - [ ] **Poison pill**: a file that crashes the worker every time → `attempts` column → DLQ (closes the `ponytail:` in `pipeline/handler.py`)
-  - Prediction: _
 - [ ] **Network partition** (`docker network disconnect` one processor): a zombie worker finishes after its lease was reaped → double execution. Why a lease ≠ mutual exclusion; fencing tokens.
-  - Prediction: _
 - [ ] **Slow S3** (Toxiproxy latency): timeouts, retries with jitter, circuit breaker
-  - Prediction: _
 - [ ] **Retry backoff**: delayed retry topics (`retry-5s`, `retry-1m`) + DLQ replay tool
-  - Prediction: _
 - [ ] **Graceful shutdown**: redeploy during k6 with zero failed requests (including open SSE streams)
   - Already seen (Phase 3, scaling the processor 4 → 1): the processor has no SIGTERM handler.
     Python dies on the spot, `consumer.close()` never runs (the group waits the 30 s session
     timeout even on a planned stop), and a job cut mid-way stays `processing` until the
     reaper frees it after the 120 s lease. A redelivered message can't rescue it: the CAS
     claim sees `processing` and skips.
-  - Prediction: _
 - [ ] **Zero-downtime schema change** (expand/contract) during k6 across 2 api replicas
-  - Prediction: _
 - [ ] Verify only: Redis down → the rate limiter fails open (already documented)
 
 Key idea: every guarantee has a failure mode; find it by breaking it on purpose.

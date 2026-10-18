@@ -52,9 +52,8 @@ habit conflicts with these rules, these rules win.
 
 ## Roadmap
 
-Work follows `docs/ROADMAP.md` in order. Before each experiment, ask the user for their
-prediction. Tick an item only when it has been run **and** its Q&A entry exists in
-`docs/DESIGN-DECISIONS.md`.
+Work follows `docs/ROADMAP.md` in order. Tick an item only when it has been run **and**
+its Q&A entry exists in `docs/DESIGN-DECISIONS.md`.
 
 ## Commands
 
