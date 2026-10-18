@@ -1,4 +1,4 @@
-import { Pool, PoolClient } from 'pg'
+import { Pool, type PoolClient } from 'pg'
 import { config } from '../config.js'
 
 // Adapter: the process's one Postgres pool. Repositories import it; nothing else talks SQL.

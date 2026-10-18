@@ -24,7 +24,12 @@ class Tagger:
     """What happens to one event. Knows nothing about polling or offsets (kafka_loop.py)."""
 
     def __init__(
-        self, cfg: Config, store: TaggingStore, storage: Storage, describer: ImageDescriber, events: EventPublisher
+        self,
+        cfg: Config,
+        store: TaggingStore,
+        storage: Storage,
+        describer: ImageDescriber,
+        events: EventPublisher,
     ):
         self._cfg = cfg
         self._store = store
@@ -48,7 +53,9 @@ class Tagger:
             description = self._describer.describe(image, THUMBNAIL_CONTENT_TYPE)
             # No claim, no lease: a duplicate delivery calls the model again and the insert
             # loses (ADR 0007). Tagging is cheap enough to repeat, and nothing else is at stake.
-            written = self._store.insert_once(file_id, description.caption, description.tags, self._describer.model)
+            written = self._store.insert_once(
+                file_id, description.caption, description.tags, self._describer.model
+            )
         except Exception as exc:
             raise EventProcessingError(str(exc)) from exc
 
@@ -78,12 +85,15 @@ class Tagger:
             "tagging moved to DLQ after max attempts, file stays untagged",
             extra={"ctx": {"fileId": file_id, "attempt": attempt, "error": str(exc)}},
         )
-        self._events.send_to_dlq(file_id, {
-            "eventId": str(uuid.uuid4()),
-            "eventType": envelope.get("eventType"),
-            "aggregateId": file_id,
-            "payload": payload,
-            "attempt": attempt,
-            "error": str(exc),
-            "failedAt": now_iso(),
-        })
+        self._events.send_to_dlq(
+            file_id,
+            {
+                "eventId": str(uuid.uuid4()),
+                "eventType": envelope.get("eventType"),
+                "aggregateId": file_id,
+                "payload": payload,
+                "attempt": attempt,
+                "error": str(exc),
+                "failedAt": now_iso(),
+            },
+        )

@@ -13,15 +13,23 @@ up seconds later, and if the model is down the file simply stays untagged.
 
 ## Flow
 
+```mermaid
+flowchart TD
+  E["file.ready / file.made_public<br/>(file-events, file-tagging-retry)"] --> T{"event type handled?"}
+  T -- no --> I["ignored"]
+  T -- yes --> G{"gate: read the file from Postgres<br/>Published (public AND ready) with a thumbnail?"}
+  G -- "no: private, still processing, pdf, text" --> S["skipped<br/>(the other trigger event is still to come)"]
+  G -- yes --> TH["S3 GET thumbnail"]
+  TH --> M["OpenAI Responses API<br/>image + schema, SDK backoff on 429/5xx"]
+  M --> DB["INSERT INTO file_ai_metadata<br/>ON CONFLICT DO NOTHING<br/>first write wins (ADR 0007)"]
+  DB --> C["commit the offset"]
+  M -- error --> F{"attempt < max_attempts?"}
+  TH -- error --> F
+  F -- yes --> R["file-tagging-retry (attempt + 1)"]
+  F -- no --> D["file-tagging-dlq<br/>the file stays ready, just untagged"]
 ```
-file-events / file-tagging-retry      (file.ready and file.made_public; the rest is ignored)
-  → gate: read the file from Postgres; Published (public AND ready) with a thumbnail?
-      no → skip (private, still processing, pdf, text); the other trigger event is still to come
-  → S3 GET thumbnail → OpenAI Responses API (image + schema) → caption + tags
-  → INSERT INTO file_ai_metadata ... ON CONFLICT DO NOTHING      first write wins (ADR 0007)
-  on error: file-tagging-retry (attempt + 1), after max_attempts → file-tagging-dlq
-            the File itself is never touched: still `ready`, just untagged
-```
+
+The tagger never changes the File: no status update, no event.
 
 ## Layout
 

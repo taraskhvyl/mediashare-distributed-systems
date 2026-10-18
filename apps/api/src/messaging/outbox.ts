@@ -1,9 +1,9 @@
 import crypto from 'node:crypto'
 import { context, propagation, ROOT_CONTEXT, SpanStatusCode, trace } from '@opentelemetry/api'
 import { suppressTracing } from '@opentelemetry/core'
-import { Producer } from 'kafkajs'
-import { Pool, PoolClient } from 'pg'
-import { FastifyBaseLogger } from 'fastify'
+import type { FastifyBaseLogger } from 'fastify'
+import type { Producer } from 'kafkajs'
+import type { Pool, PoolClient } from 'pg'
 
 const tracer = trace.getTracer('mediashare-api/outbox')
 
@@ -107,13 +107,8 @@ export function startOutboxRelay(
       }
       if (rows.length > 0) {
         const ids = rows.map((r) => r.id)
-        await client.query('UPDATE outbox_events SET published_at = now() WHERE id = ANY($1::bigint[])', [
-          ids,
-        ])
-        log.info(
-          { count: rows.length, eventTypes: rows.map((r) => r.event_type) },
-          'outbox relay published events',
-        )
+        await client.query('UPDATE outbox_events SET published_at = now() WHERE id = ANY($1::bigint[])', [ids])
+        log.info({ count: rows.length, eventTypes: rows.map((r) => r.event_type) }, 'outbox relay published events')
       }
       await client.query('COMMIT')
     } catch (err) {

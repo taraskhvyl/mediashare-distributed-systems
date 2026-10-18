@@ -66,7 +66,9 @@ def api_retry(token, base, method, path, max_retries=5, **kw):
         if resp.status_code != 429:
             return resp
         wait = min(int(resp.headers.get("Retry-After", "5") or 5), 12)
-        print(f"    got 429 rate-limited; client honors Retry-After and waits {wait}s (backoff is the client's job)")
+        print(
+            f"    got 429 rate-limited; client honors Retry-After and waits {wait}s (backoff is the client's job)"
+        )
         time.sleep(wait)
         resp = api(token, base, method, path, **kw)
     return resp
@@ -106,21 +108,31 @@ def wait_for_caption(token, base, file_id, timeout=60):
         if file["caption"]:
             return file
         time.sleep(1)
-    raise TimeoutError(f"file {file_id} got no caption within {timeout}s (is the tagger running? OPENAI_API_KEY set?)")
+    raise TimeoutError(
+        f"file {file_id} got no caption within {timeout}s (is the tagger running? OPENAI_API_KEY set?)"
+    )
 
 
 def upload_and_process(token, base, path, content_type):
     """Register, upload directly to S3, complete, and wait for the pipeline. Returns (id, status)."""
     data = path.read_bytes()
-    resp = api_retry(token, base, "POST", "/v1/files", json={
-        "filename": path.name,
-        "contentType": content_type,
-        "sizeBytes": len(data),
-    })
+    resp = api_retry(
+        token,
+        base,
+        "POST",
+        "/v1/files",
+        json={
+            "filename": path.name,
+            "contentType": content_type,
+            "sizeBytes": len(data),
+        },
+    )
     resp.raise_for_status()
     created = resp.json()
     file_id = created["file"]["id"]
-    put = requests.put(created["uploadUrl"], data=data, headers={"Content-Type": content_type}, verify=False, timeout=60)
+    put = requests.put(
+        created["uploadUrl"], data=data, headers={"Content-Type": content_type}, verify=False, timeout=60
+    )
     put.raise_for_status()
     resp = api_retry(token, base, "POST", f"/v1/files/{file_id}/complete")
     resp.raise_for_status()
@@ -139,11 +151,13 @@ def open_event_stream(token, base):
 
     def listen():
         headers = {"Authorization": f"Bearer {token}"}
-        with requests.get(f"{base}/v1/events", headers=headers, stream=True, verify=False, timeout=(5, 120)) as resp:
+        with requests.get(
+            f"{base}/v1/events", headers=headers, stream=True, verify=False, timeout=(5, 120)
+        ) as resp:
             connected.set()
             for line in resp.iter_lines(decode_unicode=True):
                 if line and line.startswith("data: "):
-                    events.append(json.loads(line[len("data: "):]))
+                    events.append(json.loads(line[len("data: ") :]))
 
     threading.Thread(target=listen, daemon=True).start()
     assert connected.wait(SSE_CONNECT_TIMEOUT_S), "SSE stream did not connect"
@@ -170,7 +184,9 @@ def social_demo(args, demo_token, file_path, content_type):
     alice_file_id, status = upload_and_process(alice_token, base, file_path, content_type)
     assert status == "ready", f"alice's file ended {status}"
     resp = api(demo_token, base, "GET", f"/v1/files/{alice_file_id}")
-    print(f"    demo GET alice's private file: HTTP {resp.status_code} (expected 404: existence is not revealed)")
+    print(
+        f"    demo GET alice's private file: HTTP {resp.status_code} (expected 404: existence is not revealed)"
+    )
     assert resp.status_code == 404
 
     step(16, "alice makes it public -> it is a Published file (public AND ready)")
@@ -218,7 +234,9 @@ def social_demo(args, demo_token, file_path, content_type):
     assert resp.json()["likeCount"] == 0
 
     step(19, "alice makes it private again -> gone from demo's feed, 404 again")
-    api_retry(alice_token, base, "PATCH", f"/v1/files/{alice_file_id}", json={"visibility": "private"}).raise_for_status()
+    api_retry(
+        alice_token, base, "PATCH", f"/v1/files/{alice_file_id}", json={"visibility": "private"}
+    ).raise_for_status()
     feed = api(demo_token, base, "GET", "/v1/feed").json()
     assert all(f["id"] != alice_file_id for f in feed["files"])
     resp = api(demo_token, base, "GET", f"/v1/files/{alice_file_id}")
@@ -271,30 +289,48 @@ def main():
 
     step(3, "register file metadata, receive a presigned S3 upload URL")
     idem = str(uuid.uuid4())
-    resp = api(token, args.api_base, "POST", "/v1/files", headers={"Idempotency-Key": idem}, json={
-        "filename": file_path.name,
-        "contentType": content_type,
-        "sizeBytes": len(local_bytes),
-    })
+    resp = api(
+        token,
+        args.api_base,
+        "POST",
+        "/v1/files",
+        headers={"Idempotency-Key": idem},
+        json={
+            "filename": file_path.name,
+            "contentType": content_type,
+            "sizeBytes": len(local_bytes),
+        },
+    )
     show(resp)
     resp.raise_for_status()
     created = resp.json()
     file_id = created["file"]["id"]
     upload_url = created["uploadUrl"]
-    print(f"    upload URL host: {requests.utils.urlparse(upload_url).netloc} (note: signed, no auth header needed)")
+    print(
+        f"    upload URL host: {requests.utils.urlparse(upload_url).netloc} (note: signed, no auth header needed)"
+    )
 
     step(4, "replay the same Idempotency-Key (expect 200 with idempotentReplay)")
-    resp = api(token, args.api_base, "POST", "/v1/files", headers={"Idempotency-Key": idem}, json={
-        "filename": file_path.name,
-        "contentType": content_type,
-        "sizeBytes": len(local_bytes),
-    })
+    resp = api(
+        token,
+        args.api_base,
+        "POST",
+        "/v1/files",
+        headers={"Idempotency-Key": idem},
+        json={
+            "filename": file_path.name,
+            "contentType": content_type,
+            "sizeBytes": len(local_bytes),
+        },
+    )
     show(resp, ["idempotentReplay", "file"])
     assert resp.status_code == 200 and resp.json().get("idempotentReplay")
 
     if not args.skip_upload:
         step(5, "upload the bytes DIRECTLY to S3 via the presigned URL (bypasses the API)")
-        put = requests.put(upload_url, data=local_bytes, headers={"Content-Type": content_type}, verify=False, timeout=60)
+        put = requests.put(
+            upload_url, data=local_bytes, headers={"Content-Type": content_type}, verify=False, timeout=60
+        )
         print(f"    HTTP {put.status_code} from S3 (200 = stored)")
         put.raise_for_status()
 
@@ -345,10 +381,17 @@ def main():
             thumb_path.write_bytes(thumb.content)
             print(f"    thumbnail (public bucket, no auth needed): {thumb_path} ({len(thumb.content)} bytes)")
 
-            step("9b", "AI caption: a PRIVATE file is never sent to the model; publishing it triggers the tagger")
-            time.sleep(PRIVATE_SETTLE_SECONDS)  # the tagger has seen file.ready by now and must have skipped it
+            step(
+                "9b",
+                "AI caption: a PRIVATE file is never sent to the model; publishing it triggers the tagger",
+            )
+            time.sleep(
+                PRIVATE_SETTLE_SECONDS
+            )  # the tagger has seen file.ready by now and must have skipped it
             before = api(token, args.api_base, "GET", f"/v1/files/{file_id}").json()["file"]
-            print(f"    private file, caption after {PRIVATE_SETTLE_SECONDS}s: {before['caption']} (expected None)")
+            print(
+                f"    private file, caption after {PRIVATE_SETTLE_SECONDS}s: {before['caption']} (expected None)"
+            )
             assert before["caption"] is None, "a private file was tagged"
 
             set_visibility(token, args.api_base, file_id, "public")
@@ -372,9 +415,17 @@ def main():
         step(11, "burst 12 mutating requests to trip the per-user Redis token bucket (expect 429s)")
         codes = []
         for _ in range(12):
-            r = api(token, args.api_base, "POST", "/v1/files", json={
-                "filename": "burst.png", "contentType": "image/png", "sizeBytes": 1024,
-            })
+            r = api(
+                token,
+                args.api_base,
+                "POST",
+                "/v1/files",
+                json={
+                    "filename": "burst.png",
+                    "contentType": "image/png",
+                    "sizeBytes": 1024,
+                },
+            )
             codes.append(r.status_code)
         ok = codes.count(201)
         limited = codes.count(429)
@@ -398,15 +449,22 @@ def main():
     step(13, "browser app + CORS: only https://app.localhost may call the api and PUT to S3")
     app_origin = "https://app.localhost"
     resp = requests.get(f"{app_origin}/", verify=False, timeout=10)
-    print(f"    GET {app_origin}/: HTTP {resp.status_code}, CSP: {resp.headers.get('Content-Security-Policy', '')[:40]}...")
+    print(
+        f"    GET {app_origin}/: HTTP {resp.status_code}, CSP: {resp.headers.get('Content-Security-Policy', '')[:40]}..."
+    )
     assert resp.status_code == 200 and "Content-Security-Policy" in resp.headers
 
     def preflight(url, origin, method, headers):
-        return requests.options(url, verify=False, timeout=10, headers={
-            "Origin": origin,
-            "Access-Control-Request-Method": method,
-            "Access-Control-Request-Headers": headers,
-        })
+        return requests.options(
+            url,
+            verify=False,
+            timeout=10,
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": method,
+                "Access-Control-Request-Headers": headers,
+            },
+        )
 
     for origin in (app_origin, "https://evil.example"):
         r = preflight(f"{args.api_base}/v1/files", origin, "GET", "authorization")
@@ -415,7 +473,9 @@ def main():
         assert allowed == (origin == app_origin)
         r = preflight(upload_url, origin, "PUT", "content-type")
         allowed = r.headers.get("Access-Control-Allow-Origin") == origin
-        print(f"    S3 presigned-PUT preflight from {origin}: HTTP {r.status_code}, browser allows: {allowed}")
+        print(
+            f"    S3 presigned-PUT preflight from {origin}: HTTP {r.status_code}, browser allows: {allowed}"
+        )
         assert allowed == (origin == app_origin)
 
     step(14, "list remaining files")
@@ -428,7 +488,9 @@ def main():
 
     print("\nDemo finished successfully.")
     print("Watch the pipeline live:  make logs")
-    print("Inspect messages:         docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic file-events --from-beginning")
+    print(
+        "Inspect messages:         docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic file-events --from-beginning"
+    )
     print("Dead-letter queue:        ... --topic file-events-dlq")
 
 

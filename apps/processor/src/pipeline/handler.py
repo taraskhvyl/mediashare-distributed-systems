@@ -72,31 +72,41 @@ class Processor:
         self._store.mark_ready(file_id, thumbnail_key, checksum)
         logger.info(
             "file processed",
-            extra={"ctx": {
-                "fileId": file_id,
-                "bytes": len(data),
-                "checksum": checksum,
-                "thumbnail": thumbnail_key is not None,
-            }},
+            extra={
+                "ctx": {
+                    "fileId": file_id,
+                    "bytes": len(data),
+                    "checksum": checksum,
+                    "thumbnail": thumbnail_key is not None,
+                }
+            },
         )
-        self._events.emit("file.ready", file_id, {
-            "fileId": file_id,
-            "ownerId": owner_id,
-            "filename": payload.get("filename"),
-            "thumbnailKey": thumbnail_key,
-            "checksum": checksum,
-        })
+        self._events.emit(
+            "file.ready",
+            file_id,
+            {
+                "fileId": file_id,
+                "ownerId": owner_id,
+                "filename": payload.get("filename"),
+                "thumbnailKey": thumbnail_key,
+                "checksum": checksum,
+            },
+        )
         return {"outcome": "ready", "fileId": file_id}
 
     def _reject_infected(self, file_id: str, object_key: str, owner_id: str | None) -> None:
         self._storage.delete_upload(object_key)
         self._store.mark_infected(file_id)
         logger.warning("malware detected, object purged", extra={"ctx": {"fileId": file_id}})
-        self._events.emit("file.rejected", file_id, {
-            "fileId": file_id,
-            "ownerId": owner_id,
-            "reason": "malware",
-        })
+        self._events.emit(
+            "file.rejected",
+            file_id,
+            {
+                "fileId": file_id,
+                "ownerId": owner_id,
+                "reason": "malware",
+            },
+        )
 
     def _store_thumbnail(self, file_id: str, data: bytes, content_type: str) -> str | None:
         """The thumbnail's key, or None for types that have no thumbnail (pdf, text)."""
@@ -129,20 +139,27 @@ class Processor:
             "event moved to DLQ after max attempts",
             extra={"ctx": {"fileId": file_id, "attempt": attempt, "error": str(exc)}},
         )
-        self._events.emit("file.failed", aggregate_id, {
-            "fileId": file_id,
-            "ownerId": payload.get("ownerId"),
-            "error": str(exc),
-        })
-        self._events.send_to_dlq(aggregate_id, {
-            "eventId": str(uuid.uuid4()),
-            "eventType": envelope.get("eventType"),
-            "aggregateId": aggregate_id,
-            "payload": payload,
-            "attempt": attempt,
-            "error": str(exc),
-            "failedAt": now_iso(),
-        })
+        self._events.emit(
+            "file.failed",
+            aggregate_id,
+            {
+                "fileId": file_id,
+                "ownerId": payload.get("ownerId"),
+                "error": str(exc),
+            },
+        )
+        self._events.send_to_dlq(
+            aggregate_id,
+            {
+                "eventId": str(uuid.uuid4()),
+                "eventType": envelope.get("eventType"),
+                "aggregateId": aggregate_id,
+                "payload": payload,
+                "attempt": attempt,
+                "error": str(exc),
+                "failedAt": now_iso(),
+            },
+        )
 
     def reap_expired_claims(self) -> None:
         # Kafka redelivery alone can't recover a crashed claim: the redelivered event
@@ -154,11 +171,18 @@ class Processor:
         for row in self._store.reap_expired(self._cfg.claim_lease_seconds):
             file_id = str(row["id"])
             logger.warning("expired claim reaped, re-enqueued", extra={"ctx": {"fileId": file_id}})
-            self._events.send_to_retry(file_id, new_envelope("file.uploaded", file_id, {
-                "fileId": file_id,
-                "objectKey": row["object_key"],
-                "ownerId": row["owner_id"],
-                "filename": row["filename"],
-                "contentType": row["content_type"],
-                "sizeBytes": row["size_bytes"],
-            }))
+            self._events.send_to_retry(
+                file_id,
+                new_envelope(
+                    "file.uploaded",
+                    file_id,
+                    {
+                        "fileId": file_id,
+                        "objectKey": row["object_key"],
+                        "ownerId": row["owner_id"],
+                        "filename": row["filename"],
+                        "contentType": row["content_type"],
+                        "sizeBytes": row["size_bytes"],
+                    },
+                ),
+            )

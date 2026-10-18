@@ -44,9 +44,7 @@ export function FileDialog({ file, onClose, onToggleVisibility, onDownload }: Fi
         <label className="flex items-center justify-between gap-4">
           <span>
             <span className="block text-sm font-medium">Public</span>
-            <span className="block text-xs text-muted-foreground">
-              {visibilityHint(isPublic, waitingToPublish)}
-            </span>
+            <span className="block text-xs text-muted-foreground">{visibilityHint(isPublic, waitingToPublish)}</span>
           </span>
           <Switch checked={isPublic} onCheckedChange={() => onToggleVisibility(file)} />
         </label>

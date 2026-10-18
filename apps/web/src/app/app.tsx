@@ -1,8 +1,8 @@
 // Composition: picks the page and wires features to each other (a follow refreshes the
 // Feed, a live event refreshes your files). Features never import each other's hooks.
 import { useState } from 'react'
-import { LoginScreen } from '@/features/auth/login-screen'
 import { logout } from '@/features/auth/login-flow'
+import { LoginScreen } from '@/features/auth/login-screen'
 import { useSession } from '@/features/auth/use-session'
 import { FeedPage } from '@/features/feed/feed-page'
 import { useFeed } from '@/features/feed/use-feed'

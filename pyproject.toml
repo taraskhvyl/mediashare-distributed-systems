@@ -1,0 +1,13 @@
+# Only configures tooling (ruff); the Python apps keep their own requirements.txt.
+[tool.ruff]
+line-length = 110
+# py313 on purpose: the py314 formatter drops the parentheses in `except (A, B):` (PEP 758), which reads like Python 2.
+target-version = "py313"
+src = ["apps/processor/src", "apps/tagger/src"]
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, import order, pyupgrade, bugbear.
+select = ["E", "F", "I", "UP", "B"]
+# The formatter owns line length; the long ones left are demo print strings it can't split.
+ignore = ["E501"]

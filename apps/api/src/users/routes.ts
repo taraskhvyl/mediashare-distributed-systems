@@ -1,5 +1,5 @@
-import { FastifyInstance } from 'fastify'
-import { USERNAME_PARAMS, UsernameParams } from '../http/schemas.js'
+import type { FastifyInstance } from 'fastify'
+import { USERNAME_PARAMS, type UsernameParams } from '../http/schemas.js'
 import * as users from './service.js'
 
 const USER_SEARCH_QUERY = {

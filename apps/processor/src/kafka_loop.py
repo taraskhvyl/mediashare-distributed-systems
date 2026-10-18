@@ -80,7 +80,9 @@ def _handle_message(msg: Message, processor: Processor) -> None:
     try:
         envelope = json.loads(msg.value())
     except (json.JSONDecodeError, UnicodeDecodeError):
-        logger.error("poison message dropped", extra={"ctx": {"topic": msg.topic(), "partition": msg.partition()}})
+        logger.error(
+            "poison message dropped", extra={"ctx": {"topic": msg.topic(), "partition": msg.partition()}}
+        )
         return
 
     # Retry/DLQ messages produced inside this span carry it on, so a retry
@@ -94,14 +96,16 @@ def _handle_message(msg: Message, processor: Processor) -> None:
             result = processor.handle(envelope)
             logger.info(
                 "event handled",
-                extra={"ctx": {
-                    "eventId": envelope.get("eventId"),
-                    "eventType": envelope.get("eventType"),
-                    "topic": msg.topic(),
-                    "partition": msg.partition(),
-                    "offset": msg.offset(),
-                    "result": result,
-                }},
+                extra={
+                    "ctx": {
+                        "eventId": envelope.get("eventId"),
+                        "eventType": envelope.get("eventType"),
+                        "topic": msg.topic(),
+                        "partition": msg.partition(),
+                        "offset": msg.offset(),
+                        "result": result,
+                    }
+                },
             )
         except EventProcessingError as exc:
             processor.handle_failure(envelope, exc)

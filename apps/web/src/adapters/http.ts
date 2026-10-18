@@ -19,7 +19,11 @@ interface RequestOptions {
   headers?: Record<string, string>
 }
 
-export async function request<T>(method: string, path: string, { body, headers = {} }: RequestOptions = {}): Promise<T> {
+export async function request<T>(
+  method: string,
+  path: string,
+  { body, headers = {} }: RequestOptions = {},
+): Promise<T> {
   const { traceId, traceparent } = newTraceparent()
   // Paste the id into Grafana → Explore → Tempo to see this click's whole trace.
   console.info(`[trace] ${method} ${path} traceId=${traceId}`)

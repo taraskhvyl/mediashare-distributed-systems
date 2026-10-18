@@ -1,5 +1,5 @@
 import { thumbnailPublicUrl } from '../adapters/s3.js'
-import { FileRow, FileView } from './repository.js'
+import type { FileRow, FileView } from './repository.js'
 
 // Who sees what of a file. The row-level gates (may you read it at all?) are SQL in the
 // repository; this module decides which fields each viewer gets.

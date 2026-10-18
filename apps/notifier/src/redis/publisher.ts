@@ -1,5 +1,5 @@
-import { LIVE_EVENTS_CHANNEL, type LiveEvent, encodeLiveEvent } from '@mediashare/live-events'
-import { Redis } from 'ioredis'
+import { encodeLiveEvent, LIVE_EVENTS_CHANNEL, type LiveEvent } from '@mediashare/live-events'
+import type { Redis } from 'ioredis'
 import { logger } from '../log.js'
 
 /**

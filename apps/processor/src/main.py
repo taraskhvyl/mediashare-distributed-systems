@@ -22,13 +22,15 @@ def main() -> None:
     events = EventPublisher(cfg, Producer({"bootstrap.servers": cfg.kafka_brokers}))
     processor = Processor(cfg, FileStore(cfg), Storage(cfg), events)
 
-    consumer = Consumer({
-        "bootstrap.servers": cfg.kafka_brokers,
-        "group.id": CONSUMER_GROUP,
-        "enable.auto.commit": False,  # we commit after handling: at-least-once
-        "auto.offset.reset": "earliest",
-        "session.timeout.ms": SESSION_TIMEOUT_MS,
-    })
+    consumer = Consumer(
+        {
+            "bootstrap.servers": cfg.kafka_brokers,
+            "group.id": CONSUMER_GROUP,
+            "enable.auto.commit": False,  # we commit after handling: at-least-once
+            "auto.offset.reset": "earliest",
+            "session.timeout.ms": SESSION_TIMEOUT_MS,
+        }
+    )
     consumer.subscribe(
         [cfg.topic_main, cfg.topic_retry],
         on_assign=kafka_loop.log_assignment,
@@ -36,11 +38,13 @@ def main() -> None:
     )
     logger.info(
         "processor started",
-        extra={"ctx": {
-            "groupId": CONSUMER_GROUP,
-            "topics": [cfg.topic_main, cfg.topic_retry],
-            "dlq": cfg.topic_dlq,
-        }},
+        extra={
+            "ctx": {
+                "groupId": CONSUMER_GROUP,
+                "topics": [cfg.topic_main, cfg.topic_retry],
+                "dlq": cfg.topic_dlq,
+            }
+        },
     )
 
     try:

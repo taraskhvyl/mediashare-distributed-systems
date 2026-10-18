@@ -2,8 +2,9 @@
 // virtual users. Run with `make loadtest`. Goes through the gateway like a real client,
 // so TLS, the gateway and the per-user token bucket are part of what's measured. Its network
 // is exempt from per-IP limits (infra/ratelimit/config.yaml): k6 stands in for many clients.
-import http from 'k6/http'
+
 import { check, sleep } from 'k6'
+import http from 'k6/http'
 import { Counter } from 'k6/metrics'
 
 const API = 'https://api.localhost/v1'
@@ -15,7 +16,10 @@ const TOKEN_URL = `${AUTH}/realms/media/protocol/openid-connect/token`
 // touched, so `make demo`'s exact assertions (e.g. alice has 1 follower) keep holding.
 const LOADTEST_USER_COUNT = Number(__ENV.LOADTEST_USERS ?? 50)
 const LOADTEST_PASSWORD = 'loadtest-pass'
-const LOADTEST_USERNAMES = Array.from({ length: LOADTEST_USER_COUNT }, (_, i) => `loadtest-${String(i + 1).padStart(2, '0')}`)
+const LOADTEST_USERNAMES = Array.from(
+  { length: LOADTEST_USER_COUNT },
+  (_, i) => `loadtest-${String(i + 1).padStart(2, '0')}`,
+)
 
 const SAMPLE_PNG = open('/samples/sample.png', 'b')
 

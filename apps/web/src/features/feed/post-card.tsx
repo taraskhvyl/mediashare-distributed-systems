@@ -26,6 +26,7 @@ export function PostCard({ file, onToggleLike, onDownload }: PostCardProps) {
         <span className="text-sm font-semibold">{file.ownerUsername}</span>
       </header>
 
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: double-click is a mouse shortcut; the Like button below is the keyboard and screen-reader path */}
       <div onDoubleClick={likeOnDoubleClick} className="cursor-pointer overflow-hidden rounded-sm border select-none">
         <FileThumbnail thumbnailUrl={file.thumbnailUrl} filename={file.filename} />
       </div>
@@ -40,7 +41,12 @@ export function PostCard({ file, onToggleLike, onDownload }: PostCardProps) {
         >
           <Heart className={cn('size-6', file.likedByMe && 'fill-like text-like')} />
         </Button>
-        <Button variant="ghost" size="icon" aria-label={`Download ${file.filename}`} onClick={() => onDownload(file.id)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Download ${file.filename}`}
+          onClick={() => onDownload(file.id)}
+        >
           <Download className="size-6" />
         </Button>
       </div>

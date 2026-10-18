@@ -16,10 +16,7 @@ def make_gradient_png(path: Path, width: int = 800, height: int = 600) -> None:
 
     def chunk(tag: bytes, data: bytes) -> bytes:
         return (
-            struct.pack(">I", len(data))
-            + tag
-            + data
-            + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+            struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
         )
 
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
