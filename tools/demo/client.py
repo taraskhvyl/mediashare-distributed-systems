@@ -88,6 +88,27 @@ def wait_for_final_status(token, base, file_id, timeout=90):
     raise TimeoutError(f"file {file_id} did not reach a final state within {timeout}s")
 
 
+PRIVATE_SETTLE_SECONDS = 8
+
+
+def set_visibility(token, base, file_id, visibility):
+    resp = api_retry(token, base, "PATCH", f"/v1/files/{file_id}", json={"visibility": visibility})
+    resp.raise_for_status()
+
+
+def wait_for_caption(token, base, file_id, timeout=60):
+    """The tagger runs after `ready` (its own consumer group), so the caption arrives later."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        resp = api(token, base, "GET", f"/v1/files/{file_id}")
+        resp.raise_for_status()
+        file = resp.json()["file"]
+        if file["caption"]:
+            return file
+        time.sleep(1)
+    raise TimeoutError(f"file {file_id} got no caption within {timeout}s (is the tagger running? OPENAI_API_KEY set?)")
+
+
 def upload_and_process(token, base, path, content_type):
     """Register, upload directly to S3, complete, and wait for the pipeline. Returns (id, status)."""
     data = path.read_bytes()
@@ -323,6 +344,19 @@ def main():
             thumb_path = out_dir / f"{file_id}.webp"
             thumb_path.write_bytes(thumb.content)
             print(f"    thumbnail (public bucket, no auth needed): {thumb_path} ({len(thumb.content)} bytes)")
+
+            step("9b", "AI caption: a PRIVATE file is never sent to the model; publishing it triggers the tagger")
+            time.sleep(PRIVATE_SETTLE_SECONDS)  # the tagger has seen file.ready by now and must have skipped it
+            before = api(token, args.api_base, "GET", f"/v1/files/{file_id}").json()["file"]
+            print(f"    private file, caption after {PRIVATE_SETTLE_SECONDS}s: {before['caption']} (expected None)")
+            assert before["caption"] is None, "a private file was tagged"
+
+            set_visibility(token, args.api_base, file_id, "public")
+            tagged = wait_for_caption(token, args.api_base, file_id)
+            print(f"    published -> caption: {tagged['caption']}")
+            print(f"    tags:    {tagged['tags']}")
+            assert tagged["tags"], "caption without tags"
+            set_visibility(token, args.api_base, file_id, "private")  # leave the state as we found it
 
     if not args.skip_infected:
         step(10, "upload an 'infected' file (processor must reject + purge it)")

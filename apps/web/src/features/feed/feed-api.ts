@@ -9,6 +9,8 @@ export interface FeedFile {
   contentType: string
   sizeBytes: number
   thumbnailUrl: string | null
+  caption: string | null
+  tags: string[]
   likeCount: number
   likedByMe: boolean
   createdAt: string

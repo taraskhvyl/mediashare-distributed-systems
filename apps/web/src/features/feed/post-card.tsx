@@ -1,4 +1,5 @@
 import { Download, Heart } from 'lucide-react'
+import { FileCaption } from '@/components/file-caption'
 import { FileThumbnail } from '@/components/file-thumbnail'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/components/ui/utils'
@@ -48,6 +49,7 @@ export function PostCard({ file, onToggleLike, onDownload }: PostCardProps) {
       <p className="text-sm">
         <span className="font-semibold">{file.ownerUsername}</span> {file.filename}
       </p>
+      <FileCaption caption={file.caption} tags={file.tags} />
     </article>
   )
 }

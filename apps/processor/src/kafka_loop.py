@@ -10,6 +10,8 @@ from config import Config
 from log import get
 from pipeline.handler import EventProcessingError, Processor
 
+# apps/tagger/src/kafka_loop.py is a copy of this loop (minus the reaper), on purpose: the two
+# services may change their loops independently.
 logger = get("kafka_loop")
 tracer = trace.get_tracer("processor")
 
