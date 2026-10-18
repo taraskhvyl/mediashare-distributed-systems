@@ -1,0 +1,31 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  // Skip everything .gitignore skips (.venv, node_modules, dist, certs).
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "apps/**/*.{ts,tsx,js,mjs}",
+      "packages/**/*.{ts,tsx,js,mjs}",
+      "tools/**/*.{ts,tsx,js,mjs}",
+      "!**/dist",
+      "!**/node_modules",
+      "!apps/web/src/components/ui"
+    ]
+  },
+  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
+  "javascript": {
+    "formatter": { "quoteStyle": "single", "semicolons": "asNeeded", "trailingCommas": "all" }
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        // `req.user!` after the auth hook is the api's deliberate pattern, not a lurking null.
+        "noNonNullAssertion": "off"
+      },
+      "a11y": {
+        // Radix's Switch renders a real <button>, which the label labels.
+        "noLabelWithoutControl": { "level": "error", "options": { "inputComponents": ["Switch"] } }
+      }
+    }
+  }
+}

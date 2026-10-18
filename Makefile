@@ -1,4 +1,4 @@
-.PHONY: env certs build up down reset logs ps kafka-ui demo loadtest clean
+.PHONY: env certs build up down reset logs ps kafka-ui demo loadtest clean lint format
 
 VENV := .venv
 
@@ -51,3 +51,14 @@ $(VENV)/.stamp: tools/demo/requirements.txt
 
 clean:
 	rm -rf $(VENV) tools/demo/out
+
+# Biome (TypeScript, via the pnpm workspace) and Ruff (Python, via uvx: nothing added to the images).
+lint:
+	pnpm exec biome check
+	uvx ruff check
+	uvx ruff format --check
+
+format:
+	pnpm exec biome check --write
+	uvx ruff check --fix
+	uvx ruff format

@@ -69,6 +69,8 @@ make kafka-ui  # opt-in read-only Kafka dashboard on http://127.0.0.1:8080 (prof
 docker compose exec -T lgtm curl -sG localhost:3200/api/search --data-urlencode 'q={ name = "PUT /v1/files/:id/like" }'  # find traces (TraceQL)
 docker compose exec -T lgtm curl -s localhost:3200/api/traces/<traceId>   # full trace JSON; span ids are base64
 make down    # stop, keep data
+make lint    # Biome (TypeScript) + Ruff (Python), check only
+make format  # same tools, apply fixes; commit a formatting pass on its own
 make reset   # stop + wipe volumes (needed after editing infra/postgres/init/*)
 docker compose up -d --build <service>   # rebuild one service after a code change
 docker compose up -d --build web         # after any apps/web change (Vite build inside the image)
