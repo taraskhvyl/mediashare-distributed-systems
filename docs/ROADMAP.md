@@ -402,3 +402,18 @@ to the model). Q&A: "How do you call a slow, paid, non-deterministic API…" in 
 - [ ] Embeddings of captions in pgvector, `GET /v1/search`; compare the query plan (exact vs.
   approximate index) the way `tools/scripts/experiment-feed-plan.sh` does for the feed.
 
+## Phase 8 — Billing
+
+Subscriptions that gate MCP ([ADR 0010](adr/0010-billing-webhook-is-a-nudge.md)). The provider is a
+dev-only fake shaped like Stripe, so we practise the hard part: an untrusted, at-least-once webhook.
+
+- [ ] `apps/billing` + `apps/fake-payments`: checkout, signed webhook, dedupe, re-fetch, entitlements;
+  the Plan page in the web app; MCP gated by an entitlement instead of the `mcp-user` role.
+  Written, not yet run end to end: tick when `make demo` passes steps B1-B7 and the Plan page has
+  been used in the browser.
+- Experiments:
+  - [ ] Lose a webhook (`announce: false`): billing stays stale. Then build the reconcile job that fixes it.
+  - [ ] Kill billing mid-delivery and watch the provider's retries; replay a whole batch.
+  - [ ] Push the new status to the Plan page over live events (an outbox in billing, a second
+    outbox consumer), instead of polling.
+  - [ ] Rotate the webhook secret with two `v1` signatures in flight.

@@ -47,9 +47,10 @@ still checked on every request: a session id is never a credential.
   uploader chose, and `list_feed` hands them to the client's model. Defense: tool results are
   plain data and cannot change scopes or permissions; descriptions say the text is untrusted.
   It reduces the risk; it does not remove it. Writes are the reason scopes exist.
-- **Who may use it, what is recorded, how fast:** realm role `mcp-user` (checked by the MCP server,
-  since a Keycloak scope cannot depend on a role), an audit log line per tool call, and a
-  per-user Envoy limit of 5 req/s on `mcp.localhost` (SECURITY.md has the details and gaps).
+- **Who may use it, what is recorded, how fast:** an active subscription, looked up in billing
+  ([ADR 0010](0010-billing-webhook-is-a-nudge.md); this was first a Keycloak realm role `mcp-user`,
+  replaced because a role would be a second copy of the payment state), an audit log line per
+  tool call, and a per-user Envoy limit of 5 req/s on `mcp.localhost` (SECURITY.md has the details and gaps).
 - **One replica.** Sessions live in the process's memory; a request that reaches another replica
   gets `404`. Fix when needed: route by `Mcp-Session-Id` in Envoy, or a shared session store.
 - **Client attribution is self-reported** (`clientInfo.name`, `User-Agent`). It is recorded on

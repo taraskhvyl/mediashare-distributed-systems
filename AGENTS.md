@@ -131,6 +131,12 @@ Top level: `apps/` (deployed), `packages/` (shared libs), `infra/` (third-party 
 - `apps/mcp-server`: MCP (Streamable HTTP) at `mcp.localhost` for AI assistants. Accepts only tokens
   with its own `aud`, exchanges them at Keycloak for an api token (no passthrough). Stateful
   sessions in memory: **one replica**. `edge` network only. ADR 0009.
+- `apps/billing`: subscriptions + entitlements (`edge` + `data`, role `billing_user`). Three doors: user JWT
+  (`/v1/billing/*`), service token (`/internal/entitlements/:userId`, only the MCP server), signed
+  provider webhook (`billing.localhost`). Webhook = nudge: verify, dedupe by event id, re-fetch, upsert.
+  ADR 0010.
+- `apps/fake-payments`: **dev-only** Stripe-shaped provider (checkout page at `pay.localhost`, provider
+  API, `/control` levers on `127.0.0.1:3010`). In memory. Never deploy.
 - `packages/auth`: shared JWT verification (`@mediashare/auth`, `audience` required), used by api, sse-gateway and mcp-server.
   Node services are a pnpm workspace (`pnpm-workspace.yaml`; shared package referenced as
   `workspace:*`) built by one two-stage `apps/node.Dockerfile` from the repo root
@@ -162,7 +168,17 @@ Top level: `apps/` (deployed), `packages/` (shared libs), `infra/` (third-party 
 - Tokens have one audience each: `media-api` (api, sse-gateway, Envoy `keycloak` provider) or the
   MCP URL (mcp-server, `keycloak_mcp` provider). A new client of the api needs the `media-api`
   audience mapper in `media-realm.json`, or its tokens get 401/403.
-- Using MCP needs the realm role `mcp-user` (enforced in `apps/mcp-server`); a new user without it gets 403.
+- Using MCP needs an active subscription (billing says so; `mcp-user` role is gone). A new user gets
+  403 `subscription_required` until they pay on the Plan page. `make demo` subscribes `demo` and
+  `alice` (B1-B2) and leaves `demo` canceled (B7).
+- Service tokens for billing come from the separate client `media-mcp-billing` (`aud = media-billing`
+  only). Don't add that audience to `media-mcp-server`: its exchanged tokens would carry it too.
+- New Node app with fastify: pin the **same** `fastify` / `@fastify/otel` / `@fastify/cors` ranges as
+  `apps/api`. `pnpm add` picks the newest fastify, and two copies make `app.register(otel)` fail to
+  typecheck in the image build.
+- Billing schema/role/Keycloak client on an already running stack (instead of `make reset`): run the
+  billing block of `02-schema.sql` and `CREATE ROLE billing_user` by hand, create the client with
+  `kcadm`. Also `sh tools/scripts/gen-certs.sh` + `docker compose restart gateway` for the new hosts.
 - `media-realm.json` must not define `clientScopes`: it would replace Keycloak's built-ins and
   tokens lose `sub`/roles. The `mcp:*` scopes are created by the `keycloak-init` one-shot.
   `KC_HOSTNAME` is the full URL so the issuer is the same when reached over `http://keycloak:8080`.

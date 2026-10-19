@@ -38,3 +38,13 @@ would now say something different.
 
 **Tags** — a few short keywords describing an image File, produced together with its
 Caption and sharing its lifecycle.
+
+**Subscription** — a User's paid arrangement for a Plan, kept in step with the payments provider.
+A User has at most one. Its status is the provider's (`active`, `trialing`, `past_due`,
+`unpaid`, `canceled`, ...); we never invent one.
+
+**Plan** — what a Subscription buys. Today only `pro`, which includes MCP.
+
+**Entitlement** — whether a User may use a Plan's features right now. A Subscription that is
+`active`, `trialing` or `past_due` entitles; `unpaid` and `canceled` do not. Features ask for an
+Entitlement; they never read a Subscription status themselves.

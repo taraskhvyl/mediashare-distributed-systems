@@ -29,6 +29,7 @@ src/
     files/          own files, upload dialog, file dialog, status badges
     feed/           feed page, post card, likes
     people/         search, follow
+    billing/        Plan page: subscription status, checkout redirect, polls for the webhook's result
     live-events/    SSE client + parser, hook
     log/            in-app event log sheet
   adapters/         api HTTP client, S3 presigned upload, Keycloak endpoints, traceparent

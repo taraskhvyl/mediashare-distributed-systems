@@ -634,6 +634,23 @@ to one replica; the fix (route by session id, or a shared store) is a roadmap ex
 Scopes limit what a fooled model can do (`mcp:write` only for idempotent likes/follows);
 captions are untrusted text and stay data. See [ADR 0009](adr/0009-mcp-server-exchanges-tokens.md).
 
+## Q: How do you add subscriptions on top of a payment provider you don't control?
+
+**A:** The provider tells us about payments by calling a webhook, and that call is at-least-once
+and unordered, so billing treats it as a *nudge*. It verifies the HMAC signature on the raw body
+(and a 5-minute window), skips event ids it has already processed (primary key, inserted in the same
+transaction as the state change), then asks the provider for the subscription's *current* state and
+stores that. A duplicate does nothing; an old event that arrives late just re-reads the latest
+truth, so reordering cannot revoke a paying customer. Features ask billing ("is user X entitled?")
+instead of copying the status into Keycloak, because a second copy needs a dual write.
+
+**Trade-offs:** one provider call per event; a lost webhook leaves a stale status until a
+reconcile job (roadmap) exists; `past_due` keeps access on purpose (the provider's retries decide
+when it ends), so a non-paying user can have MCP for a few days; a "yes" is cached 30 s, so a
+cancellation takes that long to bite. The webhook is a public endpoint, so its security is the
+signature, the per-IP limit and the body cap, not a token. See
+[ADR 0010](adr/0010-billing-webhook-is-a-nudge.md); run `make demo` steps B1-B7.
+
 ## Q: What's missing / what would you do next?
 
 Known limitations, tracked deliberately:

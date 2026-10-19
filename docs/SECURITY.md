@@ -211,6 +211,8 @@ works if clients honor it — the demo client does (`api_retry`).
   on that column to infer the index, so the insert uses a bare `ON CONFLICT DO NOTHING`
   (found when the first insert failed with "permission denied").
   `api_user` gets SELECT on `file_ai_metadata` to show captions.
+- `billing_user`: SELECT/INSERT/UPDATE on `subscriptions`, SELECT/INSERT on
+  `processed_webhook_events` (no UPDATE, no DELETE: the dedupe record is append-only).
 - Schema is created by the init job (superuser), not by services. In production:
   migration tooling (Flyway/Alembic) + per-service users, or per-service schemas.
 
@@ -230,10 +232,11 @@ ADR 0009 has the reasoning; the rules, in short:
 - **Prompt injection**: captions are untrusted text (they come from pixels the uploader
   controls). Tool results are data only; they cannot change scopes. Scopes and idempotent,
   reversible writes limit the damage if a model is fooled; they do not prevent it.
-- **Who may use it**: the realm role `mcp-user` (demo and alice have it, admin does not). The
-  MCP server returns 403 without it; a valid token alone is not enough.
+- **Who may use it**: a user with an active subscription (see "Billing" below). The MCP server asks
+  billing on every request and returns `403 subscription_required` without one; a valid token
+  alone is not enough. Billing unreachable = nobody gets in (fail closed).
 - **Audit trail**: every tool call is a log line (`event: mcp.tool_call`: user, tool, SHA-256 of
-  the arguments, outcome, duration) and every role denial `mcp.access_denied`, with the trace id.
+  the arguments, outcome, duration) and every denial `mcp.access_denied`, with the trace id.
   In Grafana → Explore → Loki: `{service_name="mcp-server"} | json | event="mcp.tool_call"`.
   Not covered: scope denials (403 `insufficient_scope`) are answered by the SDK before the
   handler and are not in this log; arguments are hashed, not stored, so you cannot read what a
@@ -243,6 +246,30 @@ ADR 0009 has the reasoning; the rules, in short:
   never saw them; only its write bucket applies behind the MCP server.
 - Not done: `media-mcp` is pre-registered (no open client registration); the `mcp.localhost`
   host has no CORS, so browser pages cannot call it directly.
+
+## Billing (a public webhook that changes who may use a paid feature)
+
+[ADR 0010](adr/0010-billing-webhook-is-a-nudge.md). Three doors into `apps/billing`, each with its
+own credential:
+
+- **Users** (`/v1/billing/*`): the normal user JWT (`aud = media-api`), verified at Envoy and in the
+  service. A user can only read and start checkout for their own `sub`.
+- **Other services** (`/internal/entitlements/:userId`, never routed by Envoy): a client-credentials
+  token with `aud = media-billing`, from the client `media-mcp-billing`. Its audience is *only*
+  billing, so it works nowhere else, and billing additionally requires the caller to be that
+  service account (a second client with a billing token is refused). The answer is a boolean.
+- **The payments provider** (`POST https://billing.localhost/webhooks/payments`): public, no JWT.
+  The credential is an HMAC-SHA256 signature over `timestamp.rawBody`, compared in constant time,
+  with a 5-minute window against replay; the body is verified before it is parsed. Envoy routes
+  only this one path on that host, with a per-IP limit; the service caps the body at 64 KB.
+  Forged, unsigned and stale requests get 400 (demo step B6).
+- **Webhooks are not trusted for state.** Billing re-reads the subscription from the provider with
+  its API key, so a replayed or forged event cannot set a status by itself.
+- Database: `billing_user` has `SELECT/INSERT/UPDATE` on `subscriptions` and `SELECT/INSERT` on
+  `processed_webhook_events`, nothing else. The api cannot read these tables.
+- Not done: the webhook secret and API key are shared dev values in `.env` (no rotation, no
+  overlapping `v1` signatures during a rotation); Envoy has no body-size cap on the webhook host
+  (the service enforces one); the fake provider's `/control` is published on loopback only.
 
 ## AI provider calls (the tagger)
 
