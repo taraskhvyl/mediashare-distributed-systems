@@ -131,6 +131,7 @@ Keycloak admin console: `https://auth.localhost/admin` (user `admin`, password f
 | tagger     | Python 3.14    | Kafka consumer (own group): OpenAI vision → caption + tags for Published files only, retry/DLQ, LLM spans to Langfuse |
 | notifier   | Node 24 + TS   | second Kafka consumer group: webhooks + live events published to Redis |
 | sse-gateway | Node 24 + TS  | SSE stream `/v1/events` to the browser, fed by Redis pub/sub (no Kafka access) |
+| mcp-server  | Node 24 + TS  | MCP tools for AI assistants at `mcp.localhost`; token exchange to the api; `edge` network only (ADR 0009) |
 | postgres   | Postgres 18    | file metadata + outbox table, least-privilege per-service roles  |
 | kafka      | Kafka 4.3 (KRaft) | event backbone: `file-events`, `-retry`, `-dlq`              |
 | storage    | SeaweedFS 4.47 | S3-compatible object store: private + public buckets, scoped IAM identities |

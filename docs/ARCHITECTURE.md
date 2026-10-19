@@ -295,6 +295,11 @@ cloud ones is configuration, not code.
 
 ## Scaling notes
 
+- **mcp-server** is the exception: it keeps MCP sessions in memory, so it runs **one replica**.
+  A second replica would answer `404` to sessions it never opened. Fix: consistent-hash routing
+  on `Mcp-Session-Id` in Envoy (no shared state, sessions die with the replica) or a shared
+  session store. The Keycloak exchange cache is per process and harmless to duplicate.
+
 - **api** is stateless (JWT validation is local; no server-side session) → horizontal scale
   behind the gateway: `API_REPLICAS=3` (default 1); Envoy finds replicas via Docker DNS and
   round-robins. First things to watch: postgres connection pool (`max: 10` per pod)

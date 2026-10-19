@@ -22,6 +22,7 @@ export const config = {
   redisUrl: required('REDIS_URL'),
   kafkaBrokers: (process.env.KAFKA_BROKERS ?? 'kafka:9092').split(','),
   authIssuer: required('AUTH_ISSUER'),
+  authAudience: required('AUTH_AUDIENCE'),
   authJwksUrl: required('AUTH_JWKS_URL'),
   webOrigin: required('WEB_ORIGIN'),
   s3: {

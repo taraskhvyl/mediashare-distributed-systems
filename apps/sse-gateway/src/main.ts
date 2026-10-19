@@ -19,7 +19,11 @@ async function main() {
   const eventsServer = startEventsServer({
     port: config.port,
     webOrigin: config.webOrigin,
-    verifyAuthorizationHeader: createTokenVerifier({ issuer: config.authIssuer, jwksUrl: config.authJwksUrl }),
+    verifyAuthorizationHeader: createTokenVerifier({
+      issuer: config.authIssuer,
+      audience: config.authAudience,
+      jwksUrl: config.authJwksUrl,
+    }),
     registry,
     log: logger,
   })

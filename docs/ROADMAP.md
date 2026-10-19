@@ -385,9 +385,17 @@ to the model). Q&A: "How do you call a slow, paid, non-deterministic API…" in 
 
 ### 7b. MCP server
 
-- [ ] `apps/mcp-server`: tools over the api (`list_feed`, `like_file`, `follow_user`,
-  `search_files`); forwards the caller's Keycloak JWT, holds no credentials of its own
-  (ADR 0003 keeps holding). Open question: MCP's OAuth flow with Keycloak, token audience.
+- [x] `apps/mcp-server` ([ADR 0009](adr/0009-mcp-server-exchanges-tokens.md)): tools over the api
+  (`whoami`, `list_feed`, `list_my_files`, `get_file` under `mcp:read`; `like_file`, `follow_user`
+  under `mcp:write`). The MCP spec forbids forwarding the caller's token, so the server validates a
+  token for itself and **exchanges** it (RFC 8693) for an api token; api, sse-gateway and Envoy
+  now enforce `aud`. Demo steps 18b–18e.
+  - Found on the way: a realm import with `clientScopes` drops Keycloak's built-in scopes; the
+    exchange's `audience` must be an existing client (so `media-api` became a bearer-only client);
+    `KC_HOSTNAME` as a bare host makes the issuer depend on the URL used to reach Keycloak.
+  - Search tool waits for 7c.
+  - [ ] Experiment: scale to 3 replicas, watch the `404`s, fix with `Mcp-Session-Id` hashing in Envoy.
+  - [ ] Experiment: a real client through the browser login (MCP Inspector, code + PKCE).
 
 ### 7c. Semantic search
 

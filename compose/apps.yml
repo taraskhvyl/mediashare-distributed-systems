@@ -5,9 +5,11 @@
 # WEB_ORIGIN is shared with compose/data.yml, so it lives in compose/env/web-origin.env instead.
 
 # Token verification settings for every service that checks Keycloak JWTs.
-# The gateway's jwt_authn repeats issuer + JWKS URL (infra/gateway/envoy.yaml): change both.
+# The gateway's jwt_authn repeats issuer + audience + JWKS URL (infra/gateway/envoy.yaml): change both.
 x-auth-env: &auth-env
   AUTH_ISSUER: https://auth.localhost/realms/media
+  # Tokens for other services (e.g. the MCP server's) are rejected: ADR 0009.
+  AUTH_AUDIENCE: media-api
   AUTH_JWKS_URL: http://keycloak:8080/realms/media/protocol/openid-connect/certs
 
 # OpenTelemetry, zero-code: the SDK reads everything from env. Each service adds its own
@@ -171,6 +173,36 @@ services:
   # Serves the browser's live-event stream (GET /v1/events, SSE) behind Envoy. The only
   # internet-facing service besides api: no Kafka, no Postgres (network `sse` has only
   # redis + lgtm), and its Redis user may only SUBSCRIBE to the live-events channel.
+  mcp-server:
+    build:
+      context: .
+      dockerfile: apps/node.Dockerfile
+      args: { SERVICE: mcp-server }
+    # edge only: Envoy routes to it; it reaches Keycloak (login + token exchange) and the api.
+    # No Kafka, Postgres or Redis. Holds per-client sessions in memory, so ONE replica
+    # (docs/adr/0009-mcp-server-token-exchange.md).
+    networks: [edge]
+    environment:
+      PORT: "3002"
+      <<: [*auth-env, *node-otel-env]
+      # Overrides the anchor's media-api: this service accepts only tokens meant for itself.
+      AUTH_AUDIENCE: https://mcp.localhost/mcp
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/media/protocol/openid-connect/token
+      MCP_CLIENT_ID: media-mcp-server
+      MCP_CLIENT_SECRET: ${MCP_CLIENT_SECRET:?}
+      API_AUDIENCE: media-api
+      API_URL: http://api:3000/v1
+      OTEL_SERVICE_NAME: mcp-server
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
   sse-gateway:
     build:
       context: .

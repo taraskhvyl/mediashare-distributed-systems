@@ -104,6 +104,26 @@ static_resources:
                           # Same values as the x-auth-env anchor in compose/apps.yml (Envoy
                           # can't read compose env). Change both together.
                           issuer: https://auth.localhost/realms/media
+                          audiences: [media-api]
+                          remote_jwks:
+                            http_uri:
+                              uri: http://keycloak:8080/realms/media/protocol/openid-connect/certs
+                              cluster: keycloak
+                              timeout: 1s
+                            # Like the services' JWKS cache: keys are fetched once, not per request.
+                            # async_fetch loads them at startup, so the first request isn't slowed.
+                            cache_duration: 600s
+                            async_fetch: {}
+                          clock_skew_seconds: 5
+                          # Keep the Authorization header: the services verify the token too
+                          # (defense in depth, docs/adr/0003-jwt-verified-at-edge-and-in-services.md).
+                          forward: true
+                          # Verified claims go to dynamic metadata; the per-user limit reads `sub`.
+                          payload_in_metadata: jwt_payload
+                        keycloak_mcp:
+                          # Same issuer/JWKS as `keycloak`; only the audience differs (ADR 0009).
+                          issuer: https://auth.localhost/realms/media
+                          audiences: ["https://mcp.localhost/mcp"]
                           remote_jwks:
                             http_uri:
                               uri: http://keycloak:8080/realms/media/protocol/openid-connect/certs
@@ -121,6 +141,14 @@ static_resources:
                           payload_in_metadata: jwt_payload
                       requirement_map:
                         keycloak: { provider_name: keycloak }
+                        # Passes with no token or a bad one: the mcp-server itself answers 401 with
+                        # the WWW-Authenticate challenge MCP clients need to find the login; Envoy's
+                        # own 401 has none. A valid token still fills the `sub` for the per-user limit.
+                        keycloak_mcp:
+                          requires_any:
+                            requirements:
+                              - provider_name: keycloak_mcp
+                              - allow_missing_or_failed: {}
                       # A CORS preflight never carries the token (it asks whether sending one is
                       # allowed); 401'ing it would break every browser call.
                       bypass_cors_preflight: true
@@ -257,6 +285,27 @@ static_resources:
                             append_x_forwarded_host: true
                             rate_limits: [*per-ip-edge, *per-user]
 
+                    - name: mcp
+                      domains: [mcp.localhost, "mcp.localhost:443"]
+                      typed_per_filter_config:
+                        envoy.filters.http.jwt_authn:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.PerRouteConfig
+                          requirement_name: keycloak_mcp
+                      response_headers_to_add:
+                        - *frame-deny
+                        - *nosniff
+                        - *no-referrer
+                        - *hsts
+                      routes:
+                        # Streamable HTTP can hold a GET stream open per session: no route timeout,
+                        # an idle timeout well above any client keep-alive.
+                        - match: { prefix: / }
+                          route:
+                            cluster: mcp-server
+                            timeout: 0s
+                            idle_timeout: 3600s
+                            rate_limits: [*per-ip-edge, *per-user]
+
                     - name: s3
                       domains: [s3.localhost, "s3.localhost:443"]
                       response_headers_to_add: [*nosniff]
@@ -294,6 +343,11 @@ static_resources:
       load_assignment:
         cluster_name: sse-gateway
         endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: sse-gateway, port_value: 3001 } } } }] }]
+    - name: mcp-server
+      type: STRICT_DNS
+      load_assignment:
+        cluster_name: mcp-server
+        endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: mcp-server, port_value: 3002 } } } }] }]
     - name: keycloak
       type: STRICT_DNS
       load_assignment:

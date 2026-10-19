@@ -619,6 +619,21 @@ operational choice, not an architectural one. (Bonus nuance: SeaweedFS bundles d
 into `Write:bucket`, unlike IAM's separate `s3:DeleteObject` — the processor's identity
 is one notch broader than ideal, which I'd note in a threat review.)
 
+## Q: How do you let an AI assistant act as a user without giving it the user's token?
+
+**A:** Give each service its own token audience and never forward a token. The assistant logs
+in (OAuth code + PKCE) and gets a token whose `aud` is the MCP server. The MCP server verifies
+it, then asks Keycloak to *exchange* it (RFC 8693) for a token whose `aud` is the api, for the
+same user, and calls the api with that. The api still sees the real user and applies its own
+checks. For this to hold, every service must actually check `aud`: before, none did, so a token
+for one service worked on another and the exchange would have been theatre.
+
+**Trade-offs:** one extra Keycloak call per user per token lifetime (cached), a confidential
+client and a secret to guard, and a one-time re-login. Sessions kept in memory pin the server
+to one replica; the fix (route by session id, or a shared store) is a roadmap experiment.
+Scopes limit what a fooled model can do (`mcp:write` only for idempotent likes/follows);
+captions are untrusted text and stay data. See [ADR 0009](adr/0009-mcp-server-exchanges-tokens.md).
+
 ## Q: What's missing / what would you do next?
 
 Known limitations, tracked deliberately:

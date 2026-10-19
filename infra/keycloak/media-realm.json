@@ -13,6 +13,12 @@
   "defaultRoles": ["user"],
   "clients": [
     {
+      "clientId": "media-api",
+      "name": "Media API",
+      "description": "The api as a resource server (aud of its tokens). Bearer-only: nobody logs in through it; it exists so token exchange can name it as the target audience.",
+      "bearerOnly": true
+    },
+    {
       "clientId": "media-cli",
       "name": "Demo CLI client",
       "description": "Public client used by the demo script. Password grant for demo purposes; a real SPA would use Authorization Code + PKCE.",
@@ -22,7 +28,15 @@
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "redirectUris": ["http://localhost*"],
-      "webOrigins": ["+"]
+      "webOrigins": ["+"],
+      "protocolMappers": [
+        {
+          "name": "audience: media-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "media-api", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
     },
     {
       "clientId": "media-web",
@@ -37,7 +51,60 @@
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "https://app.localhost/"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "audience: media-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "media-api", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    },
+    {
+      "clientId": "media-mcp",
+      "name": "MCP client (MCP Inspector, AI assistants)",
+      "description": "Public client for MCP logins. Code + PKCE; password grant for the demo only. Tokens are for the MCP server (aud), never the api (ADR 0009). mcp:read/mcp:write are attached by keycloak-init.",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:6274/*", "http://127.0.0.1:6274/*"],
+      "webOrigins": ["+"],
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "protocolMappers": [
+        {
+          "name": "audience: MCP server URL",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "https://mcp.localhost/mcp", "access.token.claim": "true", "id.token.claim": "false" }
+        },
+        {
+          "name": "audience: MCP server client",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.client.audience": "media-mcp-server", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    },
+    {
+      "clientId": "media-mcp-server",
+      "name": "MCP server",
+      "description": "Confidential client of the MCP server. It exchanges the user's MCP token for a media-api token (RFC 8693, ADR 0009). Secret from MCP_CLIENT_SECRET.",
+      "publicClient": false,
+      "secret": "${MCP_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "attributes": { "standard.token.exchange.enabled": "true" },
+      "protocolMappers": [
+        {
+          "name": "audience: media-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "media-api", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
     }
   ],
   "users": [

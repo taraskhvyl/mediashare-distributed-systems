@@ -84,9 +84,12 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
       KC_HTTP_ENABLED: "true"
-      KC_HOSTNAME: auth.localhost
+      # Full URL, not just the host: the issuer must be https://auth.localhost/... even when a service
+      # calls Keycloak over http://keycloak:8080 (token exchange validates the subject token's issuer).
+      KC_HOSTNAME: https://auth.localhost
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
+      MCP_CLIENT_SECRET: ${MCP_CLIENT_SECRET:?}  # substituted into the realm import (media-mcp-server)
     networks: [edge]
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import:ro
@@ -96,3 +99,16 @@ services:
       timeout: 5s
       retries: 30
     restart: unless-stopped
+
+  # One-shot: creates the MCP client scopes (the script explains why they are not in the realm import).
+  keycloak-init:
+    image: quay.io/keycloak/keycloak:26.7
+    entrypoint: ["/bin/sh", "/init/mcp-scopes.sh"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+    networks: [edge]
+    volumes:
+      - ./infra/keycloak-init:/init:ro
+    depends_on:
+      keycloak: { condition: service_healthy }
+    restart: "no"

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import requests
 import urllib3
+from mcp_demo import mcp_demo
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -31,12 +32,12 @@ def show(resp, keys=None):
         print(f"    HTTP {resp.status_code}")
 
 
-def get_token(base, username, password):
+def get_token(base, username, password, client_id="media-cli"):
     resp = requests.post(
         f"{base}/realms/media/protocol/openid-connect/token",
         data={
             "grant_type": "password",
-            "client_id": "media-cli",
+            "client_id": client_id,
             "username": username,
             "password": password,
         },
@@ -233,6 +234,9 @@ def social_demo(args, demo_token, file_path, content_type):
     print(f"    unlike: HTTP {resp.status_code} {resp.json()}")
     assert resp.json()["likeCount"] == 0
 
+    if not args.skip_mcp:
+        mcp_demo(args, step, demo_token, alice_file_id)
+
     step(19, "alice makes it private again -> gone from demo's feed, 404 again")
     api_retry(
         alice_token, base, "PATCH", f"/v1/files/{alice_file_id}", json={"visibility": "private"}
@@ -261,6 +265,7 @@ def main():
     parser.add_argument("--skip-rate-limit", action="store_true")
     parser.add_argument("--skip-admin", action="store_true")
     parser.add_argument("--skip-social", action="store_true")
+    parser.add_argument("--skip-mcp", action="store_true")
     args = parser.parse_args()
 
     file_path = Path(args.file)
