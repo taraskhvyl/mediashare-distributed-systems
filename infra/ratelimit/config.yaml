@@ -30,6 +30,14 @@ descriptors:
       - key: sub
         rate_limit: { unit: second, requests_per_unit: 10 }
 
+  # Per user on the MCP host. Tighter than the api's 10/s: a model in a loop, not a person clicking.
+  # The api's own write bucket still applies behind it (the MCP server calls the api directly).
+  - key: generic_key
+    value: mcp_user
+    descriptors:
+      - key: sub
+        rate_limit: { unit: second, requests_per_unit: 5 }
+
   - key: generic_key
     value: s3 # presigned uploads/downloads
     descriptors:

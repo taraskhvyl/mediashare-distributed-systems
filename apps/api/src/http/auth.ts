@@ -4,6 +4,7 @@ import { config } from '../config.js'
 
 const verifyAuthorizationHeader = createTokenVerifier({
   issuer: config.authIssuer,
+  audience: config.authAudience,
   jwksUrl: config.authJwksUrl,
 })
 

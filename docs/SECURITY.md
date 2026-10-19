@@ -26,6 +26,9 @@ round-trip per request — validation is signature + claims, in-process.
 
 - `jose` caches the JWKS and refetches on unknown `kid` → **key rotation works without restarts**.
 - `requiredClaims: exp, iat, iss, sub` + 5 s clock tolerance.
+- **Audience (`aud`) is enforced** by the api, the sse-gateway and Envoy (`media-api`); the MCP
+  server accepts only `https://mcp.localhost/mcp`. A token is good for one service, so a bug or
+  leak at one does not open the others (ADR 0009).
 - The demo uses the password grant (`directAccessGrants`) because it is a CLI demo. A real
   SPA/mobile client would use Authorization Code + PKCE; a real service-to-service client
   would use client-credentials.
@@ -210,6 +213,36 @@ works if clients honor it — the demo client does (`api_retry`).
   `api_user` gets SELECT on `file_ai_metadata` to show captions.
 - Schema is created by the init job (superuser), not by services. In production:
   migration tooling (Flyway/Alembic) + per-service users, or per-service schemas.
+
+## MCP server (AI assistants acting as a user)
+
+ADR 0009 has the reasoning; the rules, in short:
+
+- **No token passthrough.** The MCP server verifies a token meant for itself, then exchanges
+  it at Keycloak (RFC 8693) for an api token for the same user. The client's token never
+  reaches the api; the api token never reaches the client. The server's own Keycloak client
+  (`media-mcp-server`) is confidential; its secret is `MCP_CLIENT_SECRET`.
+- **Least privilege by scope**: `mcp:read` for reads, `mcp:write` for like/follow; a missing
+  scope gets `403 insufficient_scope` naming what to ask for. Upload, delete and visibility
+  are not offered (visibility sends images to the AI provider).
+- **Sessions**: bound to the opening user, token re-checked on every request, 404 for an id
+  that is unknown or someone else's, capped and swept when idle.
+- **Prompt injection**: captions are untrusted text (they come from pixels the uploader
+  controls). Tool results are data only; they cannot change scopes. Scopes and idempotent,
+  reversible writes limit the damage if a model is fooled; they do not prevent it.
+- **Who may use it**: the realm role `mcp-user` (demo and alice have it, admin does not). The
+  MCP server returns 403 without it; a valid token alone is not enough.
+- **Audit trail**: every tool call is a log line (`event: mcp.tool_call`: user, tool, SHA-256 of
+  the arguments, outcome, duration) and every role denial `mcp.access_denied`, with the trace id.
+  In Grafana → Explore → Loki: `{service_name="mcp-server"} | json | event="mcp.tool_call"`.
+  Not covered: scope denials (403 `insufficient_scope`) are answered by the SDK before the
+  handler and are not in this log; arguments are hashed, not stored, so you cannot read what a
+  model asked for.
+- **Rate limit**: `mcp.localhost` has its own per-user bucket (5 req/s, `infra/ratelimit/config.yaml`),
+  tighter than the api's 10/s. MCP calls reach the api directly, so the api's per-user limit
+  never saw them; only its write bucket applies behind the MCP server.
+- Not done: `media-mcp` is pre-registered (no open client registration); the `mcp.localhost`
+  host has no CORS, so browser pages cannot call it directly.
 
 ## AI provider calls (the tagger)
 

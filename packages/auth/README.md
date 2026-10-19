@@ -1,12 +1,12 @@
 # @mediashare/auth
 
-Local verification of Keycloak access tokens. Used by `apps/api` and `apps/sse-gateway`.
+Local verification of Keycloak access tokens. Used by `apps/api`, `apps/sse-gateway` and `apps/mcp-server`.
 
 ```ts
 import { AuthError, createTokenVerifier } from '@mediashare/auth'
 
-const verify = createTokenVerifier({ issuer, jwksUrl })
-const user = await verify(req.headers.authorization)   // { id, username, roles, expiresAt }
+const verify = createTokenVerifier({ issuer, audience, jwksUrl })
+const user = await verify(req.headers.authorization)   // { id, username, roles, scopes, token, expiresAt }
 ```
 
 ## What it checks
@@ -14,6 +14,8 @@ const user = await verify(req.headers.authorization)   // { id, username, roles,
 - `Authorization: Bearer <token>` is present → otherwise `AuthError('unauthorized')`.
 - Signature against the realm's public keys (JWKS), cached; an unknown key id triggers one
   refetch (key rotation), with a cooldown so bad tokens can't hammer Keycloak.
+- `aud` contains the configured `audience` (required option: a token for another service is
+  rejected, ADR 0009);
 - `iss` equals the configured issuer; `exp`, `iat`, `sub`, `preferred_username` present;
   small clock tolerance → otherwise `AuthError('invalid_token')`.
 

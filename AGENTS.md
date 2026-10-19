@@ -52,9 +52,8 @@ habit conflicts with these rules, these rules win.
 
 ## Roadmap
 
-Work follows `docs/ROADMAP.md` in order. Before each experiment, ask the user for their
-prediction. Tick an item only when it has been run **and** its Q&A entry exists in
-`docs/DESIGN-DECISIONS.md`.
+Work follows `docs/ROADMAP.md` in order. Tick an item only when it has been run **and**
+its Q&A entry exists in `docs/DESIGN-DECISIONS.md`.
 
 ## Commands
 
@@ -129,7 +128,10 @@ Top level: `apps/` (deployed), `packages/` (shared libs), `infra/` (third-party 
 - `apps/sse-gateway`: SSE endpoint `GET /v1/events` for the browser (`src/sse/events-server.ts`,
   `src/sse/stream-registry.ts`), fed by `SUBSCRIBE sse-events` (`src/redis/subscriber.ts`).
   Networks `edge` + `sse` (redis, lgtm): no Kafka, no Postgres. ADR 0005.
-- `packages/auth`: shared JWT verification (`@mediashare/auth`), used by api and sse-gateway.
+- `apps/mcp-server`: MCP (Streamable HTTP) at `mcp.localhost` for AI assistants. Accepts only tokens
+  with its own `aud`, exchanges them at Keycloak for an api token (no passthrough). Stateful
+  sessions in memory: **one replica**. `edge` network only. ADR 0009.
+- `packages/auth`: shared JWT verification (`@mediashare/auth`, `audience` required), used by api, sse-gateway and mcp-server.
   Node services are a pnpm workspace (`pnpm-workspace.yaml`; shared package referenced as
   `workspace:*`) built by one two-stage `apps/node.Dockerfile` from the repo root
   (build context `.`; `.dockerignore` keeps `.env` and certs out). Adding a dependency:
@@ -157,6 +159,14 @@ Top level: `apps/` (deployed), `packages/` (shared libs), `infra/` (third-party 
 
 ## Gotchas
 
+- Tokens have one audience each: `media-api` (api, sse-gateway, Envoy `keycloak` provider) or the
+  MCP URL (mcp-server, `keycloak_mcp` provider). A new client of the api needs the `media-api`
+  audience mapper in `media-realm.json`, or its tokens get 401/403.
+- Using MCP needs the realm role `mcp-user` (enforced in `apps/mcp-server`); a new user without it gets 403.
+- `media-realm.json` must not define `clientScopes`: it would replace Keycloak's built-ins and
+  tokens lose `sub`/roles. The `mcp:*` scopes are created by the `keycloak-init` one-shot.
+  `KC_HOSTNAME` is the full URL so the issuer is the same when reached over `http://keycloak:8080`.
+- The realm import only runs on a fresh Keycloak container; after editing the JSON, recreate `keycloak`.
 - Delivery is at-least-once everywhere. Every consumer must stay idempotent.
 - The processor DB role only has `SELECT, UPDATE` on `files`. It cannot write the outbox.
 - Networks: the gateway is on `edge` (+ `telemetry`, shared only with lgtm for span export) and cannot

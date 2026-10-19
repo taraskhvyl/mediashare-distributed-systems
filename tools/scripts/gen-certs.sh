@@ -8,9 +8,9 @@ mkdir -p "$d"
 # The server cert must name every host explicitly: browsers reject `*.localhost`
 # (a wildcard directly under a single-label TLD), and macOS requires EKU serverAuth.
 # ponytail: fixed host list, add a name here (and rm server.crt) when a new *.localhost host appears.
-SANS="DNS:localhost,DNS:app.localhost,DNS:api.localhost,DNS:auth.localhost,DNS:s3.localhost"
+SANS="DNS:localhost,DNS:app.localhost,DNS:api.localhost,DNS:auth.localhost,DNS:s3.localhost,DNS:mcp.localhost"
 
-if [ -f "$d/server.crt" ] && openssl x509 -in "$d/server.crt" -noout -ext subjectAltName | grep -q app.localhost; then
+if [ -f "$d/server.crt" ] && openssl x509 -in "$d/server.crt" -noout -ext subjectAltName | grep -q mcp.localhost; then
   echo "TLS certificate already exists (infra/gateway/certs/server.crt)"
   exit 0
 fi
