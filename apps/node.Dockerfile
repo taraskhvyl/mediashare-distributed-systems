@@ -20,6 +20,8 @@ COPY apps/api/package.json apps/api/
 COPY apps/notifier/package.json apps/notifier/
 COPY apps/sse-gateway/package.json apps/sse-gateway/
 COPY apps/mcp-server/package.json apps/mcp-server/
+COPY apps/billing/package.json apps/billing/
+COPY apps/fake-payments/package.json apps/fake-payments/
 # --frozen-lockfile: install exactly what pnpm-lock.yaml pins; fail if it's out of date.
 # The whole workspace (a few small packages), not a --filter: a filtered install skips the
 # devDependencies (TypeScript) of the workspace packages the service depends on.

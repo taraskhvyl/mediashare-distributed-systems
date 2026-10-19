@@ -279,11 +279,43 @@ static_resources:
                                       metadata_key:
                                         key: envoy.filters.http.jwt_authn
                                         path: [{ key: jwt_payload }, { key: sub }]
+                        # Billing is its own service behind the same api origin (like /v1/events).
+                        - match: { prefix: /v1/billing/ }
+                          route:
+                            cluster: billing
+                            rate_limits: [*per-ip-edge, *per-user]
                         - match: { prefix: / }
                           route:
                             cluster: api
                             append_x_forwarded_host: true
                             rate_limits: [*per-ip-edge, *per-user]
+
+                    # The payments provider's webhook endpoint: public, no JWT (the HMAC signature
+                    # in the request is the credential, checked by billing). Only this one path
+                    # is routed; per-IP limit like every public door.
+                    - name: billing
+                      domains: [billing.localhost, "billing.localhost:443"]
+                      response_headers_to_add: [*frame-deny, *nosniff, *no-referrer, *hsts]
+                      routes:
+                        - match: { path: /webhooks/payments }
+                          route:
+                            cluster: billing
+                            rate_limits: [*per-ip-edge]
+                        - match: { prefix: / }
+                          direct_response: { status: 404 }
+
+                    # The (fake) provider's hosted checkout page, which the browser is redirected to.
+                    # Only /checkout is exposed: the provider API and /control stay internal.
+                    - name: pay
+                      domains: [pay.localhost, "pay.localhost:443"]
+                      response_headers_to_add: [*frame-deny, *nosniff, *no-referrer, *hsts]
+                      routes:
+                        - match: { prefix: /checkout/ }
+                          route:
+                            cluster: fake-payments
+                            rate_limits: [*per-ip-edge]
+                        - match: { prefix: / }
+                          direct_response: { status: 404 }
 
                     - name: mcp
                       domains: [mcp.localhost, "mcp.localhost:443"]
@@ -358,6 +390,16 @@ static_resources:
       load_assignment:
         cluster_name: mcp-server
         endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: mcp-server, port_value: 3002 } } } }] }]
+    - name: billing
+      type: STRICT_DNS
+      load_assignment:
+        cluster_name: billing
+        endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: billing, port_value: 3003 } } } }] }]
+    - name: fake-payments
+      type: STRICT_DNS
+      load_assignment:
+        cluster_name: fake-payments
+        endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: fake-payments, port_value: 3010 } } } }] }]
     - name: keycloak
       type: STRICT_DNS
       load_assignment:

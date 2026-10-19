@@ -11,6 +11,7 @@ from pathlib import Path
 
 import requests
 import urllib3
+from billing_demo import billing_lifecycle_demo, billing_subscribe_demo
 from mcp_demo import mcp_demo
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -235,7 +236,9 @@ def social_demo(args, demo_token, file_path, content_type):
     assert resp.json()["likeCount"] == 0
 
     if not args.skip_mcp:
+        billing_subscribe_demo(args, step, demo_token, alice_token)  # MCP is a paid feature
         mcp_demo(args, step, demo_token, alice_file_id)
+        billing_lifecycle_demo(args, step, demo_token)
 
     step(19, "alice makes it private again -> gone from demo's feed, 404 again")
     api_retry(

@@ -92,3 +92,27 @@ GRANT INSERT ON file_ai_metadata TO tagger_user;
 GRANT SELECT (id, visibility, status, thumbnail_key) ON files TO tagger_user;
 GRANT SELECT, INSERT, UPDATE ON outbox_events TO api_user;
 GRANT USAGE, SELECT ON SEQUENCE outbox_events_id_seq TO api_user;
+
+-- Billing (ADR 0010). Owned by apps/billing; the api never reads these tables.
+-- One row per user: the provider's CURRENT view of their subscription, refreshed by every
+-- webhook (the webhook only says "something changed"; billing re-reads the state).
+CREATE TABLE IF NOT EXISTS subscriptions (
+  user_id TEXT PRIMARY KEY, -- Keycloak `sub`; no foreign key: users is the api's read model
+  provider_subscription_id TEXT NOT NULL UNIQUE,
+  plan TEXT NOT NULL,
+  status TEXT NOT NULL, -- the provider's status: active, trialing, past_due, unpaid, canceled, ...
+  current_period_end TIMESTAMPTZ NOT NULL,
+  cancel_at_period_end BOOLEAN NOT NULL DEFAULT false,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Every webhook event id we have processed. The primary key is the dedupe: the provider delivers
+-- at-least-once, and the insert shares a transaction with the state change.
+CREATE TABLE IF NOT EXISTS processed_webhook_events (
+  event_id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE ON subscriptions TO billing_user;
+GRANT SELECT, INSERT ON processed_webhook_events TO billing_user;

@@ -192,12 +192,75 @@ services:
       MCP_CLIENT_SECRET: ${MCP_CLIENT_SECRET:?}
       API_AUDIENCE: media-api
       API_URL: http://api:3000/v1
+      BILLING_URL: http://billing:3003
+      BILLING_CLIENT_ID: media-mcp-billing
+      BILLING_CLIENT_SECRET: ${MCP_BILLING_CLIENT_SECRET:?}
       OTEL_SERVICE_NAME: mcp-server
     depends_on:
       api:
         condition: service_healthy
+      billing:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  # Subscriptions (ADR 0010). Three doors: users (JWT, /v1/billing), the MCP server (service
+  # token, /internal) and the payments provider (signed webhook, /webhooks). Stateless, so it
+  # could scale out: the webhook dedupe is a Postgres primary key, not memory.
+  billing:
+    build:
+      context: .
+      dockerfile: apps/node.Dockerfile
+      args: { SERVICE: billing }
+    networks: [edge, data]
+    env_file: [compose/env/web-origin.env]
+    environment:
+      PORT: "3003"
+      <<: [*auth-env, *node-otel-env]
+      DATABASE_URL: postgres://billing_user:${BILLING_DB_PASSWORD:?}@postgres:5432/mediashare
+      SERVICE_AUDIENCE: media-billing
+      ENTITLEMENT_CALLER: service-account-media-mcp-billing
+      PAYMENTS_API_URL: http://fake-payments:3010/v1
+      PAYMENTS_API_KEY: ${PAYMENTS_API_KEY:?}
+      PAYMENTS_WEBHOOK_SECRET: ${PAYMENTS_WEBHOOK_SECRET:?}
+      OTEL_SERVICE_NAME: billing
+    depends_on:
+      postgres:
+        condition: service_healthy
+      fake-payments:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  # DEV ONLY: stands in for an external payments provider (Stripe-shaped). Hosts the checkout page
+  # (pay.localhost), the API billing calls, and /control levers for the demo. In memory.
+  fake-payments:
+    build:
+      context: .
+      dockerfile: apps/node.Dockerfile
+      args: { SERVICE: fake-payments }
+    networks: [edge]
+    # Dev only, loopback only: the demo drives /control from the host (tools/demo/billing_demo.py).
+    ports: ["127.0.0.1:3010:3010"]
+    environment:
+      PORT: "3010"
+      PAYMENTS_API_KEY: ${PAYMENTS_API_KEY:?}
+      PAYMENTS_CONTROL_KEY: ${PAYMENTS_CONTROL_KEY:?}
+      PAYMENTS_WEBHOOK_SECRET: ${PAYMENTS_WEBHOOK_SECRET:?}
+      PAYMENTS_PUBLIC_URL: https://pay.localhost
+      # Webhooks travel through the real edge, like a provider calling over the internet.
+      WEBHOOK_GATEWAY_HOST: gateway
+      WEBHOOK_PUBLIC_HOST: billing.localhost
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3010/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30
