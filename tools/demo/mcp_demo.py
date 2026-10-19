@@ -177,11 +177,11 @@ def mcp_demo(args, step, api_token, published_file_id):
     print(f"    alice using demo's session: HTTP {resp.status_code} (expected 404)")
     assert resp.status_code == 404
 
-    step("18f", "role gate: a valid MCP token without the mcp-user role (admin has none) -> 403")
+    step("18f", "paywall: a valid MCP token for a user with no subscription (admin) -> 403")
     admin_token = mcp_token(args.auth_base, args.admin_username, args.admin_password, "openid mcp:read")
     resp = mcp_post(admin_token, {"jsonrpc": "2.0", "id": 1, "method": "ping"})
-    print(f"    admin without mcp-user: HTTP {resp.status_code}, {resp.text[:100]}")
-    assert resp.status_code == 403
+    print(f"    admin without a subscription: HTTP {resp.status_code}, {resp.text[:100]}")
+    assert resp.status_code == 403 and "subscription_required" in resp.text
 
     step("18g", "MCP has its own per-user rate limit (5/s): a burst of tool calls gets 429")
     statuses = [

@@ -4,6 +4,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<EO
 CREATE ROLE api_user LOGIN PASSWORD '${API_DB_PASSWORD}';
 CREATE ROLE processor_user LOGIN PASSWORD '${PROCESSOR_DB_PASSWORD}';
 CREATE ROLE tagger_user LOGIN PASSWORD '${TAGGER_DB_PASSWORD}';
-GRANT USAGE ON SCHEMA public TO api_user, processor_user, tagger_user;
+CREATE ROLE billing_user LOGIN PASSWORD '${BILLING_DB_PASSWORD}';
+GRANT USAGE ON SCHEMA public TO api_user, processor_user, tagger_user, billing_user;
 EOSQL
-echo "Created least-privilege database roles: api_user, processor_user, tagger_user"
+echo "Created least-privilege database roles: api_user, processor_user, tagger_user, billing_user"

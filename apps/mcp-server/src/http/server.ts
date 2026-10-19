@@ -6,6 +6,7 @@ import { isInitializeRequest } from '@modelcontextprotocol/server'
 import { trace } from '@opentelemetry/api'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { Logger } from 'pino'
+import { isEntitled } from '../adapters/billing-client.js'
 import { config } from '../config.js'
 import { buildMcpServer } from '../tools/index.js'
 import { SessionRegistry } from './session-registry.js'
@@ -14,9 +15,6 @@ const MCP_PATH = new URL(config.resourceUrl).pathname
 const METADATA_PATH = '/.well-known/oauth-protected-resource'
 // Scope named in the 401 challenge: the minimum to use the server at all (spec: least privilege).
 const BASE_SCOPE = 'mcp:read'
-// Not everyone in the realm may use MCP: a Keycloak realm role grants it. Enforced here because
-// a Keycloak client scope cannot be tied to a role. Admins are not exempt; give the role to who needs it.
-const REQUIRED_ROLE = 'mcp-user'
 
 interface ServerDeps {
   verifyAuthorizationHeader: TokenVerifier
@@ -48,13 +46,16 @@ export async function startMcpServer({ verifyAuthorizationHeader, log }: ServerD
   app.all(MCP_PATH, async (req, reply) => {
     const user = await authenticate(req, reply, verifyAuthorizationHeader)
     if (!user) return
-    if (!user.roles.includes(REQUIRED_ROLE)) {
+    // MCP is a paid feature: billing says whether this user's subscription includes it (ADR 0010).
+    if (!(await isEntitled(user.id))) {
       // Same stream as the tool-call audit log: a denied attempt is worth seeing too.
-      log.warn(
-        { event: 'mcp.access_denied', userId: user.id, username: user.username, missingRole: REQUIRED_ROLE },
-        'mcp access denied',
-      )
-      return reply.code(403).send({ error: { code: 'forbidden', message: `Missing role ${REQUIRED_ROLE}` } })
+      log.warn({ event: 'mcp.access_denied', userId: user.id, username: user.username }, 'mcp access denied')
+      return reply.code(403).send({
+        error: {
+          code: 'subscription_required',
+          message: 'MCP needs an active subscription (Plan page in the web app)',
+        },
+      })
     }
     await routeToSession(req, reply, user, registry)
   })

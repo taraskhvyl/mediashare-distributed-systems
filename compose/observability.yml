@@ -8,7 +8,7 @@ services:
   # Nothing depends_on it on purpose: telemetry must never block the app from starting.
   lgtm:
     image: grafana/otel-lgtm:0.34.0
-    # sse / telemetry: so the sse-gateway and the Envoy gateway can export OTLP without
+    # sse / telemetry: so the sse-gateway, the Envoy gateway and the MCP server can export OTLP without
     # joining `data`.
     networks: [data, sse, telemetry]
     ports:

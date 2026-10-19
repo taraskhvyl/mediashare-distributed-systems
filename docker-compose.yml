@@ -19,7 +19,7 @@ networks:
   # gateway faces the internet, so it must not share a network with kafka or postgres.
   sse:
     name: mediashare-sse
-  # Only the gateway and lgtm: lets the edge export spans without reaching redis, kafka or
+  # Only the gateway, the MCP server and lgtm: lets them export spans without reaching redis, kafka or
   # postgres (same idea as `sse` for the sse-gateway).
   telemetry:
     name: mediashare-telemetry

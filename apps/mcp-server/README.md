@@ -23,17 +23,21 @@ is its own URL. It never forwards the client's token; it exchanges it.
 | `src/tools/` | the tools: `read-tools.ts` (`mcp:read`), `write-tools.ts` (`mcp:write`), `audit.ts` (one log line per call) |
 | `src/adapters/token-exchange.ts` | Keycloak RFC 8693 exchange + per-user cache |
 | `src/adapters/api-client.ts` | HTTP to the api with the exchanged token |
+| `src/adapters/billing-client.ts` | "is this user subscribed?": service token (client credentials) + 30 s cache of "yes", fails closed |
 
 Tools call the adapters directly: there is no domain logic of their own to put in a `service/`.
 
 ## Talks to
 
-`edge` network only: Keycloak (JWKS, token endpoint) and the api. No Kafka, Postgres or Redis.
-Needs `MCP_CLIENT_SECRET` (shared with the Keycloak realm import).
+`edge`: Keycloak (JWKS, token endpoint), the api and billing. `telemetry`: lgtm only, for spans and
+logs (without it the OTel SDK silently drops them). No Kafka, Postgres or Redis.
+Needs `MCP_CLIENT_SECRET` and `MCP_BILLING_CLIENT_SECRET` (shared with the Keycloak realm import).
+Using it needs an active subscription ([ADR 0010](../../docs/adr/0010-billing-webhook-is-a-nudge.md)):
+without one every request is `403 subscription_required`. Subscribe on the Plan page.
 
 ## Try it
 
-`make demo` (steps 18b–18e), or MCP Inspector:
+`make demo` (steps B1–B2, 18b–18g), or MCP Inspector:
 `npx @modelcontextprotocol/inspector` → URL `https://mcp.localhost/mcp`, OAuth client id
 `media-mcp` (users `demo` / `demo-pass`). Your machine must trust `infra/gateway/certs/ca.crt`.
 

@@ -15,12 +15,24 @@ flowchart LR
     keycloak["keycloak (OIDC, JWT)"]
     api["api (Node + TS)"]
     sse["sse-gateway (Node, SSE)<br/>+ network sse: redis, lgtm only"]
+    mcp["mcp-server (Node, MCP)"]
+    billing["billing (Node)<br/>also on data: postgres only"]
+    fake["fake-payments (dev only)"]
     storage["storage (SeaweedFS S3)"]
     gateway -- "app.localhost" --> web
     gateway -- "auth.localhost" --> keycloak
     gateway -- "api.localhost" --> api
     gateway -- "api.localhost/v1/events" --> sse
+    gateway -- "api.localhost/v1/billing" --> billing
+    gateway -- "billing.localhost (webhook)" --> billing
+    gateway -- "mcp.localhost" --> mcp
+    gateway -- "pay.localhost" --> fake
     gateway -- "s3.localhost" --> storage
+    mcp -- "token exchange" --> keycloak
+    mcp -- "exchanged token" --> api
+    mcp -- "entitled?" --> billing
+    billing -- "GET subscription" --> fake
+    fake -. "signed webhook, through the gateway" .-> gateway
   end
 
   subgraph data["mediashare-data network"]
@@ -36,6 +48,7 @@ flowchart LR
   api --> postgres
   api --> redis
   api -- "outbox relay" --> kafka
+  billing --> postgres
   kafka --> processor
   kafka --> tagger
   kafka --> notifier
@@ -59,23 +72,26 @@ A third network, **sse**, holds only `sse-gateway`, `redis` and `lgtm`: the gate
 back side, so the one other internet-facing service never shares a network with Kafka or
 Postgres.
 
-A fourth, **telemetry**, holds only `gateway` and `lgtm`: the edge exports its spans (OTLP gRPC
+A fourth, **telemetry**, holds only `gateway`, `mcp-server` and `lgtm`: they export their spans (OTLP gRPC
 :4317) without a path to redis, kafka or postgres.
 
 | container   | edge | data | sse | can be reached by              | can reach                       |
 |-------------|------|------|-----|--------------------------------|---------------------------------|
-| gateway     | ✔    | ✖    | ✖   | internet (host :443 only)      | api, sse-gateway, keycloak, storage; lgtm (spans only, via `telemetry`) |
+| gateway     | ✔    | ✖    | ✖   | internet (host :443 only)      | api, sse-gateway, mcp-server, billing, fake-payments (`/checkout/` only), keycloak, storage; lgtm (spans only, via `telemetry`) |
 | keycloak    | ✔    | ✖    | ✖   | gateway (proxy + JWKS), api, sse-gateway (JWKS) | (nothing it needs)              |
 | api         | ✔    | ✔    | ✖   | gateway (public), internal     | keycloak, postgres, redis, kafka, storage |
 | storage     | ✔    | ✔    | ✖   | gateway (S3 endpoint), internal| (nothing it needs)              |
-| postgres    | ✖    | ✔    | ✖   | api, processor                 | —                               |
+| postgres    | ✖    | ✔    | ✖   | api, processor, tagger, billing | —                              |
 | kafka       | ✖    | ✔    | ✖   | api, processor, notifier       | —                               |
 | redis       | ✖    | ✔    | ✔   | api, notifier, sse-gateway (ACL: SUBSCRIBE only) | —             |
 | processor   | ✖    | ✔    | ✖   | internal only                  | postgres, kafka, storage        |
 | tagger      | ✖    | ✔    | ✖   | internal only                  | postgres (INSERT + 4-column gate read), kafka, storage (read thumbnails), OpenAI + Langfuse egress |
 | notifier    | ✖    | ✔    | ✖   | internal only                  | kafka, redis (ACL: PUBLISH only), webhook egress |
+| mcp-server  | ✔    | ✖    | ✖   | gateway (`mcp.localhost`)      | keycloak (JWKS, token exchange, service token), api, billing; lgtm (via `telemetry`) |
+| billing     | ✔    | ✔    | ✖   | gateway (`/v1/billing`, webhook host), mcp-server | keycloak (JWKS), fake-payments (API), postgres (`billing_user`) |
+| fake-payments | ✔  | ✖    | ✖   | gateway (`pay.localhost` checkout page), billing; host loopback :3010 (`/control`, dev) | gateway (signed webhooks) |
 | sse-gateway | ✔    | ✖    | ✔   | gateway (`/v1/events` only)    | redis, keycloak, lgtm           |
-| lgtm        | ✖    | ✔    | ✔   | api, processor, notifier, sse-gateway (OTLP); host loopback :3000 | — |
+| lgtm        | ✖    | ✔    | ✔   | api, processor, notifier, sse-gateway, billing (OTLP), gateway + mcp-server (via `telemetry`); host loopback :3000 | — |
 
 The gateway is *physically incapable* of reaching the database, Kafka, or Redis. Even if
 Envoy were fully compromised, data stores are unreachable from it. The processor is not on
@@ -171,6 +187,10 @@ request that wrote the row, see "Tracing"), `published_at` (null until relayed).
 `file_ai_metadata` — the AI caption and tags (`file_id` PK, `caption`, `tags`, `model`), written once
 by the tagger; the primary key makes the first write win (ADR 0007). No row = untagged.
 
+`subscriptions` — one row per user (`user_id` = JWT `sub`): the provider's current `status`, `plan`,
+`current_period_end`. `processed_webhook_events` — every webhook event id handled; the primary key
+is the dedupe. Both belong to billing (ADR 0010).
+
 Roles: `api_user` (DML on both tables), `processor_user` (SELECT/UPDATE on `files` only),
 `tagger_user` (INSERT on `file_ai_metadata`; SELECT on four columns of `files`).
 DDL is owned by the init job, not by any service — services never create tables.
@@ -226,6 +246,23 @@ Delivery semantic is **at-least-once**: if the relay crashes between `produce()`
 `COMMIT`, the row rolls back and will be published again. Consumers therefore must be
 idempotent — the processor's `claim()` is exactly that (see DESIGN-DECISIONS.md). Debezium/CDC
 is the "industrial" version of this pattern (reading the WAL instead of polling a table).
+
+## Billing and entitlements
+
+```
+browser ─POST /v1/billing/checkout─▶ billing ─create session─▶ payments provider
+browser ◀────────── checkout URL ───┘                                │
+browser ─────── pays on the provider's hosted page (pay.localhost) ──┘
+payments provider ─POST signed event─▶ Envoy (billing.localhost) ─▶ billing
+                    billing: verify signature → already processed? → GET subscription ← provider
+                             → one transaction: record event id + upsert subscriptions row
+mcp-server ─GET /internal/entitlements/:userId (service token)─▶ billing ─▶ {entitled: bool}
+```
+
+The webhook is a nudge, not the data: billing stores what the provider says *now*, which makes
+duplicates and reordering harmless. Access rule: `active`, `trialing`, `past_due` yes;
+`canceled`, `unpaid` no. The browser learns about a payment by polling `GET /v1/billing/subscription`.
+Why and what it costs: [ADR 0010](adr/0010-billing-webhook-is-a-nudge.md).
 
 ## Tracing (one action = one trace)
 
@@ -300,6 +337,9 @@ cloud ones is configuration, not code.
   on `Mcp-Session-Id` in Envoy (no shared state, sessions die with the replica) or a shared
   session store. The Keycloak exchange cache is per process and harmless to duplicate.
 
+- **billing** is stateless: the webhook dedupe is a Postgres primary key, so replicas can share
+  one table. Its MCP-side caller keeps a per-process cache of "yes" answers (30 s).
+- **fake-payments** is a dev-only stand-in and keeps its data in memory: one replica.
 - **api** is stateless (JWT validation is local; no server-side session) → horizontal scale
   behind the gateway: `API_REPLICAS=3` (default 1); Envoy finds replicas via Docker DNS and
   round-robins. First things to watch: postgres connection pool (`max: 10` per pod)

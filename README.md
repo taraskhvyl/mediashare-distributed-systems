@@ -18,12 +18,24 @@ flowchart LR
     keycloak["keycloak (OIDC, JWT)"]
     api["api (Node + TS)"]
     sse["sse-gateway (Node, SSE)<br/>+ network sse: redis, lgtm only"]
+    mcp["mcp-server (Node, MCP)"]
+    billing["billing (Node)<br/>also on data: postgres only"]
+    fake["fake-payments (dev only)"]
     storage["storage (SeaweedFS S3)"]
     gateway -- "app.localhost" --> web
     gateway -- "auth.localhost" --> keycloak
     gateway -- "api.localhost" --> api
     gateway -- "api.localhost/v1/events" --> sse
+    gateway -- "api.localhost/v1/billing" --> billing
+    gateway -- "billing.localhost (webhook)" --> billing
+    gateway -- "mcp.localhost" --> mcp
+    gateway -- "pay.localhost" --> fake
     gateway -- "s3.localhost" --> storage
+    mcp -- "token exchange" --> keycloak
+    mcp -- "exchanged token" --> api
+    mcp -- "entitled?" --> billing
+    billing -- "GET subscription" --> fake
+    fake -. "signed webhook, through the gateway" .-> gateway
   end
 
   subgraph data["mediashare-data network"]
@@ -31,6 +43,7 @@ flowchart LR
     redis[(redis)]
     kafka{{kafka}}
     processor["processor (Python)"]
+    tagger["tagger (Python)"]
     notifier["notifier (Node)"]
     lgtm["lgtm: traces + logs<br/>Grafana 127.0.0.1:3000"]
   end
@@ -38,25 +51,32 @@ flowchart LR
   api --> postgres
   api --> redis
   api -- "outbox relay" --> kafka
+  billing --> postgres
   kafka --> processor
+  kafka --> tagger
   kafka --> notifier
   notifier -- "PUBLISH sse-events" --> redis
   redis -- "SUBSCRIBE (network sse)" --> sse
   processor --> postgres
   processor --> storage
+  tagger --> postgres
+  tagger --> storage
   api --> storage
   api -. OTLP .-> lgtm
   notifier -. OTLP .-> lgtm
   sse -. OTLP .-> lgtm
   processor -. OTLP .-> lgtm
+  tagger -. OTLP .-> lgtm
 ```
 
-api and storage are drawn on the edge network but also join the data network. sse-gateway
+api, billing and storage are drawn on the edge network but also join the data network (billing reaches only postgres). mcp-server is on the edge network plus `telemetry` (spans to lgtm only); fake-payments is on the edge network only and is not traced. sse-gateway
 joins only a third network, `sse`, with redis and lgtm: it can't reach Kafka or Postgres. The gateway joins a tiny `telemetry` network with lgtm
 only, to export its spans.
 
-**Nothing but the gateway's port 443 is exposed to your host.** The gateway cannot even
-reach the database, Kafka, or Redis — it only talks to `api`, `sse-gateway` (one path),
+**Nothing but the gateway's port 443 is exposed to your host** (plus two loopback-only dev
+ports: Grafana on 127.0.0.1:3000, and the fake payments provider's `/control` levers on
+127.0.0.1:3010). The gateway cannot even reach the database, Kafka, or Redis — it only talks to
+`api`, `sse-gateway` (one path), `billing`, `mcp-server`, `fake-payments` (checkout page only),
 `keycloak`, and `storage`.
 
 ## Quickstart
@@ -70,9 +90,10 @@ make demo      # runs the full end-to-end walkthrough (installs `requests` if ne
 Then open **https://app.localhost** and log in as `demo` / `demo-pass`: **Create** a post
 (upload with a progress bar), watch its tile in **Profile** go `uploaded → ready` live
 without refreshing, make it public, and follow people from **Search** to fill **Home**.
+Open **Plan** to subscribe on the (fake) payments page; that is what unlocks the MCP server.
 
 Requirements: Docker + Docker Compose, Python 3. `make up` generates a local dev CA and a
-server certificate for `app/api/auth/s3.localhost` under `infra/gateway/certs/` (macOS resolves
+server certificate for `app/api/auth/s3/mcp/billing/pay.localhost` under `infra/gateway/certs/` (macOS resolves
 `*.localhost` to 127.0.0.1 automatically; on Linux add the names to `/etc/hosts` if needed).
 
 To use the browser app (https://app.localhost) without warnings, trust the CA once, then
@@ -105,6 +126,14 @@ The demo client narrates every step and asserts each behavior:
 16. alice makes it public → a Published file (public AND ready)
 17. demo finds alice, follows her (twice: PUT is idempotent), sees her file in the feed
 18. demo likes it twice → like count 1, and alice gets exactly ONE live notification
+   - B1–B2. MCP is a paid feature: 403 `subscription_required` without a subscription; demo pays on
+     the fake provider's checkout page → signed webhook → subscription active → MCP allowed
+   - 18b–18g. MCP server: 401 challenge, wrong-audience tokens refused both ways, tools through the
+     token exchange, scope step-up (403 → write works), session owner binding, paywall for
+     a user without a subscription, MCP's own per-user rate limit
+   - B3–B7. the webhook under stress: the same event twice (`duplicate`), events delivered out of
+     order (still correct), `past_due` keeps access, forged / unsigned / stale webhooks get 400,
+     cancel → MCP refused within the entitlement cache window
 19. alice makes it private again → gone from demo's feed, 404 again
 
 ## Users (seeded in the Keycloak realm)
@@ -131,7 +160,9 @@ Keycloak admin console: `https://auth.localhost/admin` (user `admin`, password f
 | tagger     | Python 3.14    | Kafka consumer (own group): OpenAI vision → caption + tags for Published files only, retry/DLQ, LLM spans to Langfuse |
 | notifier   | Node 24 + TS   | second Kafka consumer group: webhooks + live events published to Redis |
 | sse-gateway | Node 24 + TS  | SSE stream `/v1/events` to the browser, fed by Redis pub/sub (no Kafka access) |
-| mcp-server  | Node 24 + TS  | MCP tools for AI assistants at `mcp.localhost`; token exchange to the api; `edge` network only (ADR 0009) |
+| mcp-server  | Node 24 + TS  | MCP tools for AI assistants at `mcp.localhost`; token exchange to the api; `edge` + `telemetry` networks (ADR 0009) |
+| billing     | Node 24 + TS  | subscriptions + entitlements: signed provider webhook, user checkout, `/internal` lookup for the MCP server (ADR 0010) |
+| fake-payments | Node 24 + TS | **dev only** Stripe-shaped provider: hosted checkout at `pay.localhost`, signed webhooks, `/control` levers |
 | postgres   | Postgres 18    | file metadata + outbox table, least-privilege per-service roles  |
 | kafka      | Kafka 4.3 (KRaft) | event backbone: `file-events`, `-retry`, `-dlq`              |
 | storage    | SeaweedFS 4.47 | S3-compatible object store: private + public buckets, scoped IAM identities |
@@ -155,6 +186,8 @@ Keycloak admin console: `https://auth.localhost/admin` (user `admin`, password f
 | PUT/DELETE | `/v1/users/:username/follow` | bearer JWT | follow / unfollow (idempotent)       |
 | DELETE | `/v1/files/:id`             | role `admin`| purges objects + row                     |
 | GET    | `/v1/events`                | bearer JWT  | SSE stream of your file events (served by sse-gateway); closed at token expiry |
+| GET    | `/v1/billing/subscription`  | bearer JWT  | your subscription or `null` (served by billing) |
+| POST   | `/v1/billing/checkout`      | bearer JWT  | start a checkout, returns the provider's hosted page URL; 409 if already subscribed |
 
 Every `api.localhost` request is verified twice: by the gateway (a bad token gets its 401
 there) and again by the service (ADR 0003). CORS: only the origin `https://app.localhost` is
@@ -169,15 +202,20 @@ apps/                  what gets deployed (each app and package has its own READ
   sse-gateway/         Node + TS SSE endpoint, subscribes to live events
   processor/           Python worker (scan, thumbnail, retry/DLQ)
   tagger/              Python worker (AI caption + tags via OpenAI, Langfuse traces)
+  mcp-server/          Node + TS MCP tools for AI assistants (token exchange, needs a subscription)
+  billing/             Node + TS subscriptions, webhook, entitlements
+  fake-payments/       dev-only stand-in payments provider
   web/                 browser app (React + TS, features/ + adapters/, built by Vite)
   node.Dockerfile      one image recipe for both Node apps
   web.Dockerfile       web app: Vite build, then nginx serves dist/
 packages/
   auth/                shared JWT verification (@mediashare/auth)
+  live-events/         notifier ↔ sse-gateway contract (@mediashare/live-events)
 infra/                 config for third-party components
   gateway/             Envoy config + TLS certs
   ratelimit/           global rate-limit rules (per IP, per user)
   keycloak/            realm import
+  keycloak-init/       one-shot kcadm script (MCP client scopes)
   postgres/init/       schema + roles (fresh volume only)
 tools/                 dev and test tooling, never deployed
   demo/                end-to-end client (`make demo`)
@@ -216,9 +254,9 @@ docker compose logs -f sse-gateway | grep sse                     # SSE streams 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — components, data flows, topics, state machine
 - [docs/SECURITY.md](docs/SECURITY.md) — threat model and every control, with trade-offs
 - [docs/DESIGN-DECISIONS.md](docs/DESIGN-DECISIONS.md) — Q&A walkthrough of every design decision, mapped to concrete code paths
-- [docs/ROADMAP.md](docs/ROADMAP.md) — learning roadmap: interactive UI → tracing → scaling → failure injection → advanced topics → deploy
-- [docs/adr/](docs/adr/) — decisions that are hard to reverse or surprising (leases, users read model, JWT at edge + services, web build step)
-- [CONTEXT.md](CONTEXT.md) — domain glossary (File, Published file, Feed, Lease…)
+- [docs/ROADMAP.md](docs/ROADMAP.md) — learning roadmap: interactive UI → tracing → scaling → failure injection → advanced topics → deploy → AI features → billing
+- [docs/adr/](docs/adr/) — decisions that are hard to reverse or surprising (leases, users read model, JWT at edge + services, web build step, SSE split, first AI caption wins, MCP token exchange, billing webhooks)
+- [CONTEXT.md](CONTEXT.md) — domain glossary (File, Published file, Feed, Lease, Subscription, Entitlement…)
 
 ## Teardown
 

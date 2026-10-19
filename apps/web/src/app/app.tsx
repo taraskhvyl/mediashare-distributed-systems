@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { logout } from '@/features/auth/login-flow'
 import { LoginScreen } from '@/features/auth/login-screen'
 import { useSession } from '@/features/auth/use-session'
+import { PlanPage } from '@/features/billing/plan-page'
+import { isCheckoutPending, useBilling } from '@/features/billing/use-billing'
 import { FeedPage } from '@/features/feed/feed-page'
 import { useFeed } from '@/features/feed/use-feed'
 import { downloadFile } from '@/features/files/download-file'
@@ -23,11 +25,12 @@ export function App() {
 }
 
 function LoggedInApp({ username }: { username: string }) {
-  const [page, setPage] = useState<PageId>('feed')
+  const [page, setPage] = useState<PageId>(isCheckoutPending() ? 'plan' : 'feed') // back from the provider's checkout page
   const [isUploadOpen, setUploadOpen] = useState(false)
   const [isLogOpen, setLogOpen] = useState(false)
   const ownFiles = useOwnFiles()
   const feed = useFeed()
+  const billing = useBilling()
 
   useLiveEvents({
     onFileEvent: ownFiles.refresh,
@@ -53,6 +56,14 @@ function LoggedInApp({ username }: { username: string }) {
           files={ownFiles.files}
           onToggleVisibility={ownFiles.toggleVisibility}
           onDownload={downloadFile}
+        />
+      )}
+
+      {page === 'plan' && (
+        <PlanPage
+          subscription={billing.subscription}
+          isWaitingForPayment={billing.isWaitingForPayment}
+          onSubscribe={billing.subscribe}
         />
       )}
 

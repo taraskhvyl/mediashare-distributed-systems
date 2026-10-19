@@ -1,6 +1,6 @@
-import { Home, type LucideIcon, Search, SquareUser } from 'lucide-react'
+import { CreditCard, Home, type LucideIcon, Search, SquareUser } from 'lucide-react'
 
-export type PageId = 'feed' | 'people' | 'profile'
+export type PageId = 'feed' | 'people' | 'profile' | 'plan'
 
 export interface NavPage {
   id: PageId
@@ -13,4 +13,5 @@ export const NAV_PAGES: NavPage[] = [
   { id: 'feed', label: 'Home', icon: Home },
   { id: 'people', label: 'Search', icon: Search },
   { id: 'profile', label: 'Profile', icon: SquareUser },
+  { id: 'plan', label: 'Plan', icon: CreditCard },
 ]

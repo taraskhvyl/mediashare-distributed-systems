@@ -6,8 +6,7 @@
   "roles": {
     "realm": [
       { "name": "user" },
-      { "name": "admin" },
-      { "name": "mcp-user", "description": "May use the MCP server (AI assistants); checked by apps/mcp-server" }
+      { "name": "admin" }
     ],
     "client": {}
   },
@@ -106,6 +105,24 @@
           "config": { "included.custom.audience": "media-api", "access.token.claim": "true", "id.token.claim": "false" }
         }
       ]
+    },
+    {
+      "clientId": "media-mcp-billing",
+      "name": "MCP server (billing lookups)",
+      "description": "Service account the MCP server uses to ask billing whether a user is entitled (client credentials, ADR 0010). Its tokens are for media-billing only. Secret from MCP_BILLING_CLIENT_SECRET.",
+      "publicClient": false,
+      "secret": "${MCP_BILLING_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience: media-billing",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "media-billing", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
     }
   ],
   "users": [
@@ -120,7 +137,7 @@
       "credentials": [
         { "type": "password", "value": "demo-pass", "temporary": false }
       ],
-      "realmRoles": ["default-roles-media", "mcp-user"]
+      "realmRoles": ["default-roles-media"]
     },
     {
       "id": "0a5250c5-fd5f-4c57-abd3-cdb5fe20ea99",
@@ -133,7 +150,7 @@
       "credentials": [
         { "type": "password", "value": "alice-pass", "temporary": false }
       ],
-      "realmRoles": ["default-roles-media", "mcp-user"]
+      "realmRoles": ["default-roles-media"]
     },
     {
       "id": "5d584c41-f952-4767-9318-042be1e7ce40",

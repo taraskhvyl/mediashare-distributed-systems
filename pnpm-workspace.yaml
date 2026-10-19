@@ -5,6 +5,8 @@ packages:
   - apps/notifier
   - apps/sse-gateway
   - apps/mcp-server
+  - apps/billing
+  - apps/fake-payments
   - apps/web
 
 # Workspace deps are copied into dependents (not symlinked), so `pnpm deploy` can produce a

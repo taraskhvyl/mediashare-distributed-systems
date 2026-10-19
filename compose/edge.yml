@@ -89,6 +89,7 @@ services:
       KC_HOSTNAME: https://auth.localhost
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
+      MCP_BILLING_CLIENT_SECRET: ${MCP_BILLING_CLIENT_SECRET:?}
       MCP_CLIENT_SECRET: ${MCP_CLIENT_SECRET:?}  # substituted into the realm import (media-mcp-server)
     networks: [edge]
     volumes:

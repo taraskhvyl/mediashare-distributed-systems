@@ -22,4 +22,7 @@ export const config = {
   /** Keycloak client name of the api, the target audience of the token exchange. */
   apiAudience: required('API_AUDIENCE'),
   apiUrl: required('API_URL'),
+  billingUrl: required('BILLING_URL'),
+  billingClientId: required('BILLING_CLIENT_ID'),
+  billingClientSecret: required('BILLING_CLIENT_SECRET'),
 }
