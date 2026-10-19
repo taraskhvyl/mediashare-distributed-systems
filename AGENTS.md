@@ -130,7 +130,7 @@ Top level: `apps/` (deployed), `packages/` (shared libs), `infra/` (third-party 
   Networks `edge` + `sse` (redis, lgtm): no Kafka, no Postgres. ADR 0005.
 - `apps/mcp-server`: MCP (Streamable HTTP) at `mcp.localhost` for AI assistants. Accepts only tokens
   with its own `aud`, exchanges them at Keycloak for an api token (no passthrough). Stateful
-  sessions in memory: **one replica**. `edge` network only. ADR 0009.
+  sessions in memory: **one replica**. `edge` + `telemetry` networks (no data stores). ADR 0009.
 - `apps/billing`: subscriptions + entitlements (`edge` + `data`, role `billing_user`). Three doors: user JWT
   (`/v1/billing/*`), service token (`/internal/entitlements/:userId`, only the MCP server), signed
   provider webhook (`billing.localhost`). Webhook = nudge: verify, dedupe by event id, re-fetch, upsert.

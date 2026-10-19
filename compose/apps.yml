@@ -178,10 +178,10 @@ services:
       context: .
       dockerfile: apps/node.Dockerfile
       args: { SERVICE: mcp-server }
-    # edge only: Envoy routes to it; it reaches Keycloak (login + token exchange) and the api.
-    # No Kafka, Postgres or Redis. Holds per-client sessions in memory, so ONE replica
-    # (docs/adr/0009-mcp-server-token-exchange.md).
-    networks: [edge]
+    # edge: Envoy routes to it; it reaches Keycloak (login + token exchange), the api and billing.
+    # telemetry: only to export spans and logs to lgtm. No Kafka, Postgres or Redis. Holds
+    # per-client sessions in memory, so ONE replica (docs/adr/0009-mcp-server-exchanges-tokens.md).
+    networks: [edge, telemetry]
     environment:
       PORT: "3002"
       <<: [*auth-env, *node-otel-env]

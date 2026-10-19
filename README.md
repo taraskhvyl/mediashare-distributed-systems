@@ -69,7 +69,7 @@ flowchart LR
   tagger -. OTLP .-> lgtm
 ```
 
-api, billing and storage are drawn on the edge network but also join the data network (billing reaches only postgres). mcp-server and fake-payments are on the edge network only. sse-gateway
+api, billing and storage are drawn on the edge network but also join the data network (billing reaches only postgres). mcp-server is on the edge network plus `telemetry` (spans to lgtm only); fake-payments is on the edge network only and is not traced. sse-gateway
 joins only a third network, `sse`, with redis and lgtm: it can't reach Kafka or Postgres. The gateway joins a tiny `telemetry` network with lgtm
 only, to export its spans.
 
@@ -160,7 +160,7 @@ Keycloak admin console: `https://auth.localhost/admin` (user `admin`, password f
 | tagger     | Python 3.14    | Kafka consumer (own group): OpenAI vision → caption + tags for Published files only, retry/DLQ, LLM spans to Langfuse |
 | notifier   | Node 24 + TS   | second Kafka consumer group: webhooks + live events published to Redis |
 | sse-gateway | Node 24 + TS  | SSE stream `/v1/events` to the browser, fed by Redis pub/sub (no Kafka access) |
-| mcp-server  | Node 24 + TS  | MCP tools for AI assistants at `mcp.localhost`; token exchange to the api; `edge` network only (ADR 0009) |
+| mcp-server  | Node 24 + TS  | MCP tools for AI assistants at `mcp.localhost`; token exchange to the api; `edge` + `telemetry` networks (ADR 0009) |
 | billing     | Node 24 + TS  | subscriptions + entitlements: signed provider webhook, user checkout, `/internal` lookup for the MCP server (ADR 0010) |
 | fake-payments | Node 24 + TS | **dev only** Stripe-shaped provider: hosted checkout at `pay.localhost`, signed webhooks, `/control` levers |
 | postgres   | Postgres 18    | file metadata + outbox table, least-privilege per-service roles  |

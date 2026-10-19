@@ -29,7 +29,8 @@ Tools call the adapters directly: there is no domain logic of their own to put i
 
 ## Talks to
 
-`edge` network only: Keycloak (JWKS, token endpoint), the api and billing. No Kafka, Postgres or Redis.
+`edge`: Keycloak (JWKS, token endpoint), the api and billing. `telemetry`: lgtm only, for spans and
+logs (without it the OTel SDK silently drops them). No Kafka, Postgres or Redis.
 Needs `MCP_CLIENT_SECRET` and `MCP_BILLING_CLIENT_SECRET` (shared with the Keycloak realm import).
 Using it needs an active subscription ([ADR 0010](../../docs/adr/0010-billing-webhook-is-a-nudge.md)):
 without one every request is `403 subscription_required`. Subscribe on the Plan page.

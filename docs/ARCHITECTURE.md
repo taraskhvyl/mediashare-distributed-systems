@@ -72,7 +72,7 @@ A third network, **sse**, holds only `sse-gateway`, `redis` and `lgtm`: the gate
 back side, so the one other internet-facing service never shares a network with Kafka or
 Postgres.
 
-A fourth, **telemetry**, holds only `gateway` and `lgtm`: the edge exports its spans (OTLP gRPC
+A fourth, **telemetry**, holds only `gateway`, `mcp-server` and `lgtm`: they export their spans (OTLP gRPC
 :4317) without a path to redis, kafka or postgres.
 
 | container   | edge | data | sse | can be reached by              | can reach                       |
@@ -87,11 +87,11 @@ A fourth, **telemetry**, holds only `gateway` and `lgtm`: the edge exports its s
 | processor   | ✖    | ✔    | ✖   | internal only                  | postgres, kafka, storage        |
 | tagger      | ✖    | ✔    | ✖   | internal only                  | postgres (INSERT + 4-column gate read), kafka, storage (read thumbnails), OpenAI + Langfuse egress |
 | notifier    | ✖    | ✔    | ✖   | internal only                  | kafka, redis (ACL: PUBLISH only), webhook egress |
-| mcp-server  | ✔    | ✖    | ✖   | gateway (`mcp.localhost`)      | keycloak (JWKS, token exchange, service token), api, billing |
+| mcp-server  | ✔    | ✖    | ✖   | gateway (`mcp.localhost`)      | keycloak (JWKS, token exchange, service token), api, billing; lgtm (via `telemetry`) |
 | billing     | ✔    | ✔    | ✖   | gateway (`/v1/billing`, webhook host), mcp-server | keycloak (JWKS), fake-payments (API), postgres (`billing_user`) |
 | fake-payments | ✔  | ✖    | ✖   | gateway (`pay.localhost` checkout page), billing; host loopback :3010 (`/control`, dev) | gateway (signed webhooks) |
 | sse-gateway | ✔    | ✖    | ✔   | gateway (`/v1/events` only)    | redis, keycloak, lgtm           |
-| lgtm        | ✖    | ✔    | ✔   | api, processor, notifier, sse-gateway (OTLP); host loopback :3000 | — |
+| lgtm        | ✖    | ✔    | ✔   | api, processor, notifier, sse-gateway, billing (OTLP), gateway + mcp-server (via `telemetry`); host loopback :3000 | — |
 
 The gateway is *physically incapable* of reaching the database, Kafka, or Redis. Even if
 Envoy were fully compromised, data stores are unreachable from it. The processor is not on
