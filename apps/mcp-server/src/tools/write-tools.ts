@@ -1,6 +1,7 @@
 import { type McpServer, requireScopes } from '@modelcontextprotocol/server'
 import * as z from 'zod/v4'
 import { apiClient } from '../adapters/api-client.js'
+import { audited } from './audit.js'
 import { callerOf } from './caller.js'
 import { toToolResult } from './tool-support.js'
 
@@ -24,7 +25,10 @@ export function registerWriteTools(server: McpServer) {
       annotations: REVERSIBLE_WRITE,
       scopeChallenge: needsWriteScope,
     },
-    async ({ fileId }, ctx) => toToolResult(() => apiClient.put(callerOf(ctx), `/files/${fileId}/like`)),
+    async ({ fileId }, ctx) =>
+      audited('like_file', ctx, { fileId }, () =>
+        toToolResult(() => apiClient.put(callerOf(ctx), `/files/${fileId}/like`)),
+      ),
   )
 
   server.registerTool(
@@ -36,6 +40,8 @@ export function registerWriteTools(server: McpServer) {
       scopeChallenge: needsWriteScope,
     },
     async ({ username }, ctx) =>
-      toToolResult(() => apiClient.put(callerOf(ctx), `/users/${encodeURIComponent(username)}/follow`)),
+      audited('follow_user', ctx, { username }, () =>
+        toToolResult(() => apiClient.put(callerOf(ctx), `/users/${encodeURIComponent(username)}/follow`)),
+      ),
   )
 }

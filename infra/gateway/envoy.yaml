@@ -304,7 +304,17 @@ static_resources:
                             cluster: mcp-server
                             timeout: 0s
                             idle_timeout: 3600s
-                            rate_limits: [*per-ip-edge, *per-user]
+                            rate_limits:
+                              - *per-ip-edge
+                              # Own per-user bucket (not the api's): AI assistants call in loops.
+                              - stage: 1
+                                actions:
+                                  - generic_key: { descriptor_value: mcp_user }
+                                  - metadata:
+                                      descriptor_key: sub
+                                      metadata_key:
+                                        key: envoy.filters.http.jwt_authn
+                                        path: [{ key: jwt_payload }, { key: sub }]
 
                     - name: s3
                       domains: [s3.localhost, "s3.localhost:443"]

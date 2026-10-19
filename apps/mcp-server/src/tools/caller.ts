@@ -1,7 +1,7 @@
 // Reads the verified caller that http/server.ts attached to the request (ctx.http.authInfo).
 import type { Caller } from './tool-support.js'
 
-interface ToolContext {
+export interface ToolContext {
   http?: { authInfo?: { token: string; clientId: string; extra?: Record<string, unknown> } }
 }
 

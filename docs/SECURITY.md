@@ -230,6 +230,17 @@ ADR 0009 has the reasoning; the rules, in short:
 - **Prompt injection**: captions are untrusted text (they come from pixels the uploader
   controls). Tool results are data only; they cannot change scopes. Scopes and idempotent,
   reversible writes limit the damage if a model is fooled; they do not prevent it.
+- **Who may use it**: the realm role `mcp-user` (demo and alice have it, admin does not). The
+  MCP server returns 403 without it; a valid token alone is not enough.
+- **Audit trail**: every tool call is a log line (`event: mcp.tool_call`: user, tool, SHA-256 of
+  the arguments, outcome, duration) and every role denial `mcp.access_denied`, with the trace id.
+  In Grafana → Explore → Loki: `{service_name="mcp-server"} | json | event="mcp.tool_call"`.
+  Not covered: scope denials (403 `insufficient_scope`) are answered by the SDK before the
+  handler and are not in this log; arguments are hashed, not stored, so you cannot read what a
+  model asked for.
+- **Rate limit**: `mcp.localhost` has its own per-user bucket (5 req/s, `infra/ratelimit/config.yaml`),
+  tighter than the api's 10/s. MCP calls reach the api directly, so the api's per-user limit
+  never saw them; only its write bucket applies behind the MCP server.
 - Not done: `media-mcp` is pre-registered (no open client registration); the `mcp.localhost`
   host has no CORS, so browser pages cannot call it directly.
 

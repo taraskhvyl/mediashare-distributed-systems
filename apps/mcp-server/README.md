@@ -20,7 +20,7 @@ is its own URL. It never forwards the client's token; it exchanges it.
 | `src/main.ts` | composition root |
 | `src/http/server.ts` | Fastify: auth on every request, session routing, metadata |
 | `src/http/session-registry.ts` | live sessions, owner binding, idle cleanup (**one replica only**) |
-| `src/tools/` | the tools: `read-tools.ts` (`mcp:read`), `write-tools.ts` (`mcp:write`) |
+| `src/tools/` | the tools: `read-tools.ts` (`mcp:read`), `write-tools.ts` (`mcp:write`), `audit.ts` (one log line per call) |
 | `src/adapters/token-exchange.ts` | Keycloak RFC 8693 exchange + per-user cache |
 | `src/adapters/api-client.ts` | HTTP to the api with the exchanged token |
 

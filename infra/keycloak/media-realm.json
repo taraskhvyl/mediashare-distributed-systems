@@ -6,7 +6,8 @@
   "roles": {
     "realm": [
       { "name": "user" },
-      { "name": "admin" }
+      { "name": "admin" },
+      { "name": "mcp-user", "description": "May use the MCP server (AI assistants); checked by apps/mcp-server" }
     ],
     "client": {}
   },
@@ -119,7 +120,7 @@
       "credentials": [
         { "type": "password", "value": "demo-pass", "temporary": false }
       ],
-      "realmRoles": ["default-roles-media"]
+      "realmRoles": ["default-roles-media", "mcp-user"]
     },
     {
       "id": "0a5250c5-fd5f-4c57-abd3-cdb5fe20ea99",
@@ -132,7 +133,7 @@
       "credentials": [
         { "type": "password", "value": "alice-pass", "temporary": false }
       ],
-      "realmRoles": ["default-roles-media"]
+      "realmRoles": ["default-roles-media", "mcp-user"]
     },
     {
       "id": "5d584c41-f952-4767-9318-042be1e7ce40",

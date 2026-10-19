@@ -8,6 +8,8 @@ import requests
 MCP_URL = "https://mcp.localhost/mcp"
 MCP_METADATA_URL = "https://mcp.localhost/.well-known/oauth-protected-resource/mcp"
 JSON_AND_SSE = "application/json, text/event-stream"
+RATE_LIMIT_RETRIES = 5
+RATE_LIMIT_WAIT_SECONDS = 4
 EXPECTED_TOOLS = {"whoami", "list_feed", "list_my_files", "get_file", "like_file", "follow_user"}
 
 
@@ -29,11 +31,18 @@ def mcp_token(auth_base, username, password, scope):
     return resp.json()["access_token"]
 
 
-def mcp_post(token, body, session_id=None):
+def mcp_post(token, body, session_id=None, wait_out_rate_limit=True):
+    """POST one JSON-RPC message. Envoy's per-user MCP limit answers 429 + Retry-After: wait it out,
+    like a well-behaved client (the burst step turns this off to see the 429)."""
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": JSON_AND_SSE}
     if session_id:
         headers["Mcp-Session-Id"] = session_id
-    return requests.post(MCP_URL, headers=headers, json=body, verify=False, timeout=30)
+    for _ in range(RATE_LIMIT_RETRIES):
+        resp = requests.post(MCP_URL, headers=headers, json=body, verify=False, timeout=30)
+        if resp.status_code != 429 or not wait_out_rate_limit:
+            return resp
+        time.sleep(int(resp.headers.get("Retry-After", 1)))
+    return resp
 
 
 def rpc_result(resp):
@@ -62,7 +71,7 @@ def open_session(token):
     return session_id
 
 
-def call_tool(token, session_id, name, arguments=None):
+def call_tool(token, session_id, name, arguments=None, wait_out_rate_limit=True):
     resp = mcp_post(
         token,
         {
@@ -72,12 +81,9 @@ def call_tool(token, session_id, name, arguments=None):
             "params": {"name": name, "arguments": arguments or {}},
         },
         session_id,
+        wait_out_rate_limit,
     )
     return resp
-
-
-RATE_LIMIT_RETRIES = 5
-RATE_LIMIT_WAIT_SECONDS = 4
 
 
 def call_write_tool(token, session_id, name, arguments):
@@ -170,3 +176,17 @@ def mcp_demo(args, step, api_token, published_file_id):
     resp = call_tool(alice_token, session_id, "whoami")
     print(f"    alice using demo's session: HTTP {resp.status_code} (expected 404)")
     assert resp.status_code == 404
+
+    step("18f", "role gate: a valid MCP token without the mcp-user role (admin has none) -> 403")
+    admin_token = mcp_token(args.auth_base, args.admin_username, args.admin_password, "openid mcp:read")
+    resp = mcp_post(admin_token, {"jsonrpc": "2.0", "id": 1, "method": "ping"})
+    print(f"    admin without mcp-user: HTTP {resp.status_code}, {resp.text[:100]}")
+    assert resp.status_code == 403
+
+    step("18g", "MCP has its own per-user rate limit (5/s): a burst of tool calls gets 429")
+    statuses = [
+        call_tool(read_token, session_id, "whoami", wait_out_rate_limit=False).status_code for _ in range(30)
+    ]
+    print(f"    30 whoami calls -> {statuses.count(200)} accepted, {statuses.count(429)} rate-limited")
+    assert 429 in statuses and 200 in statuses
+    time.sleep(RATE_LIMIT_WAIT_SECONDS)  # let the window pass so later steps are not throttled

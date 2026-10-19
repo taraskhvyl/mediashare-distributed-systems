@@ -162,6 +162,7 @@ Top level: `apps/` (deployed), `packages/` (shared libs), `infra/` (third-party 
 - Tokens have one audience each: `media-api` (api, sse-gateway, Envoy `keycloak` provider) or the
   MCP URL (mcp-server, `keycloak_mcp` provider). A new client of the api needs the `media-api`
   audience mapper in `media-realm.json`, or its tokens get 401/403.
+- Using MCP needs the realm role `mcp-user` (enforced in `apps/mcp-server`); a new user without it gets 403.
 - `media-realm.json` must not define `clientScopes`: it would replace Keycloak's built-ins and
   tokens lose `sub`/roles. The `mcp:*` scopes are created by the `keycloak-init` one-shot.
   `KC_HOSTNAME` is the full URL so the issuer is the same when reached over `http://keycloak:8080`.

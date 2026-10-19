@@ -1,6 +1,7 @@
 import { type McpServer, requireScopes } from '@modelcontextprotocol/server'
 import * as z from 'zod/v4'
 import { apiClient } from '../adapters/api-client.js'
+import { audited } from './audit.js'
 import { callerOf } from './caller.js'
 import { jsonResult, MAX_PAGE_SIZE, toToolResult, UNTRUSTED_TEXT_NOTE } from './tool-support.js'
 
@@ -11,10 +12,11 @@ export function registerReadTools(server: McpServer) {
   server.registerTool(
     'whoami',
     { description: 'The signed-in user this session acts as.', annotations: READ_ONLY, scopeChallenge: needsReadScope },
-    async (ctx) => {
-      const caller = callerOf(ctx)
-      return jsonResult({ userId: caller.userId, username: caller.username })
-    },
+    async (ctx) =>
+      audited('whoami', ctx, {}, async () => {
+        const caller = callerOf(ctx)
+        return jsonResult({ userId: caller.userId, username: caller.username })
+      }),
   )
 
   server.registerTool(
@@ -28,11 +30,12 @@ export function registerReadTools(server: McpServer) {
       annotations: READ_ONLY,
       scopeChallenge: needsReadScope,
     },
-    async ({ limit, cursor }, ctx) => {
-      const query = new URLSearchParams({ limit: String(limit) })
-      if (cursor) query.set('cursor', cursor)
-      return toToolResult(() => apiClient.get(callerOf(ctx), `/feed?${query}`))
-    },
+    async ({ limit, cursor }, ctx) =>
+      audited('list_feed', ctx, { limit, cursor }, async () => {
+        const query = new URLSearchParams({ limit: String(limit) })
+        if (cursor) query.set('cursor', cursor)
+        return toToolResult(() => apiClient.get(callerOf(ctx), `/feed?${query}`))
+      }),
   )
 
   server.registerTool(
@@ -42,7 +45,7 @@ export function registerReadTools(server: McpServer) {
       annotations: READ_ONLY,
       scopeChallenge: needsReadScope,
     },
-    async (ctx) => toToolResult(() => apiClient.get(callerOf(ctx), '/files')),
+    async (ctx) => audited('list_my_files', ctx, {}, () => toToolResult(() => apiClient.get(callerOf(ctx), '/files'))),
   )
 
   server.registerTool(
@@ -53,6 +56,7 @@ export function registerReadTools(server: McpServer) {
       annotations: READ_ONLY,
       scopeChallenge: needsReadScope,
     },
-    async ({ fileId }, ctx) => toToolResult(() => apiClient.get(callerOf(ctx), `/files/${fileId}`)),
+    async ({ fileId }, ctx) =>
+      audited('get_file', ctx, { fileId }, () => toToolResult(() => apiClient.get(callerOf(ctx), `/files/${fileId}`))),
   )
 }
